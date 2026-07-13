@@ -1,4 +1,5 @@
 import random
+import textwrap
 
 import requests
 import streamlit as st
@@ -15,7 +16,7 @@ st.set_page_config(
 
 
 # =========================================================
-# 귀여운 화면 디자인
+# 화면 디자인
 # =========================================================
 st.markdown(
     """
@@ -28,94 +29,139 @@ st.markdown(
 
     .stApp {
         background:
-            radial-gradient(circle at 10% 10%, #fff0f6 0, transparent 25%),
-            radial-gradient(circle at 90% 20%, #fff7d6 0, transparent 25%),
-            linear-gradient(135deg, #fff9fc 0%, #f1f7ff 100%);
+            radial-gradient(circle at 12% 8%, #fff1f7 0, transparent 25%),
+            radial-gradient(circle at 88% 15%, #fff8dd 0, transparent 25%),
+            linear-gradient(135deg, #fffafd 0%, #f4f8ff 100%);
     }
 
     .block-container {
-        max-width: 1150px;
+        max-width: 1180px;
         padding-top: 2rem;
         padding-bottom: 4rem;
     }
 
     .main-title {
         text-align: center;
-        font-size: 3rem;
-        color: #ff5d8f;
-        text-shadow: 3px 3px 0 #ffe1ec;
-        margin-bottom: 5px;
+        font-size: 3.2rem;
+        color: #ff4f85;
+        text-shadow: 3px 3px 0 #ffe0eb;
+        margin-bottom: 0.25rem;
     }
 
     .sub-title {
         text-align: center;
-        font-size: 1.15rem;
-        color: #707084;
-        margin-bottom: 25px;
+        color: #6f6f82;
+        font-size: 1.1rem;
+        margin-bottom: 1.8rem;
     }
 
     .weather-card {
-        background: rgba(255, 255, 255, 0.94);
-        border: 3px solid #ffd3e1;
+        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid #ffd7e5;
         border-radius: 28px;
-        padding: 25px;
-        text-align: center;
-        box-shadow: 0 10px 28px rgba(255, 93, 143, 0.14);
-        margin-bottom: 25px;
+        padding: 24px;
+        box-shadow: 0 10px 25px rgba(60, 60, 90, 0.10);
+        margin-bottom: 20px;
     }
 
-    .weather-icon {
-        font-size: 4.5rem;
-        line-height: 1;
+    .weather-layout {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr 1.5fr;
+        gap: 22px;
+        align-items: center;
+    }
+
+    .weather-emoji {
+        font-size: 5rem;
+        text-align: center;
+    }
+
+    .weather-main {
+        border-right: 1px dashed #dedee8;
+        padding-right: 18px;
     }
 
     .location {
-        font-size: 1.6rem;
-        color: #555568;
-        margin-top: 10px;
+        font-size: 1.45rem;
+        color: #323244;
+        margin-bottom: 8px;
     }
 
     .weather-name {
-        font-size: 1.3rem;
-        color: #ff5d8f;
-        margin-top: 5px;
+        display: inline-block;
+        background: #ffe7ef;
+        color: #ff4f85;
+        border-radius: 18px;
+        padding: 5px 12px;
+        font-size: 1rem;
+        margin-bottom: 10px;
     }
 
     .temperature {
         font-size: 2.8rem;
-        color: #4f79d8;
-        margin: 8px 0;
+        color: #ff4f85;
+        margin: 8px 0 4px 0;
     }
 
-    .weather-detail {
-        color: #747487;
+    .feels-like {
+        color: #66667a;
         font-size: 1rem;
+    }
+
+    .weather-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+    }
+
+    .detail-item {
+        background: #fafbff;
+        border: 1px solid #ececf4;
+        border-radius: 16px;
+        padding: 14px;
+        text-align: center;
+        color: #555568;
+    }
+
+    .detail-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #333345;
+        margin-top: 4px;
     }
 
     .recommend-title {
         text-align: center;
+        color: #2f2f42;
         font-size: 2rem;
-        color: #555568;
-        margin: 28px 0 20px 0;
+        margin-top: 28px;
+        margin-bottom: 10px;
+    }
+
+    .recommend-message {
+        text-align: center;
+        background: #fff8df;
+        border: 1.5px solid #ffd768;
+        color: #6a5a2b;
+        border-radius: 24px;
+        padding: 11px;
+        margin-bottom: 18px;
     }
 
     .food-card {
-        background: rgba(255, 255, 255, 0.96);
-        border: 2px solid #ffe0aa;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #ffd48a;
         border-radius: 24px;
-        padding: 17px;
-        min-height: 505px;
-        box-shadow: 0 8px 24px rgba(80, 80, 110, 0.11);
-    }
-
-    .food-card:hover {
-        transform: translateY(-5px);
-        transition: 0.2s;
+        padding: 16px;
+        min-height: 570px;
+        box-shadow: 0 8px 24px rgba(80, 80, 110, 0.10);
+        overflow: hidden;
     }
 
     .food-image {
+        display: block;
         width: 100%;
-        height: 205px;
+        height: 215px;
         object-fit: cover;
         border-radius: 18px;
     }
@@ -123,48 +169,63 @@ st.markdown(
     .food-name {
         text-align: center;
         font-size: 1.7rem;
+        font-weight: bold;
         color: #ff668f;
-        margin-top: 12px;
+        margin-top: 16px;
+        margin-bottom: 10px;
     }
 
     .food-reason {
         text-align: center;
-        color: #6d6d7e;
-        line-height: 1.5;
-        min-height: 52px;
+        color: #626274;
+        line-height: 1.55;
+        min-height: 55px;
+        padding: 0 8px;
+    }
+
+    .calorie-wrapper {
+        text-align: center;
+        margin: 14px 0 16px 0;
     }
 
     .calorie {
         display: inline-block;
-        background: #fff0b8;
-        color: #a96b00;
-        border-radius: 20px;
-        padding: 7px 14px;
-        margin: 8px 0 12px 0;
-        font-size: 1.05rem;
+        background: #fff1c7;
+        color: #936224;
+        border-radius: 22px;
+        padding: 8px 18px;
+        font-size: 1rem;
     }
 
-    .nutrition-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
+    .nutrition-list {
+        margin-top: 8px;
+        padding: 0 5px;
     }
 
-    .nutrition-item {
-        background: #f7f3ff;
-        border-radius: 13px;
-        padding: 9px 5px;
-        text-align: center;
-        color: #5f5974;
+    .nutrition-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 11px 5px;
+        color: #545467;
+        border-bottom: 1px dashed #dddde6;
+    }
+
+    .nutrition-row:last-child {
+        border-bottom: none;
+    }
+
+    .nutrition-row strong {
+        color: #353546;
     }
 
     .notice {
-        margin-top: 25px;
+        margin-top: 24px;
         padding: 14px;
         text-align: center;
         color: #725c26;
         background: #fff8dd;
-        border: 2px dashed #f0c65a;
+        border: 1.5px solid #f0c65a;
         border-radius: 18px;
     }
 
@@ -172,10 +233,11 @@ st.markdown(
         width: 100%;
         border: none;
         border-radius: 18px;
-        padding: 12px;
+        padding: 0.8rem;
         color: white;
-        font-size: 1.1rem;
-        background: linear-gradient(90deg, #ff80a8, #ffb36b);
+        font-size: 1.08rem;
+        background: linear-gradient(90deg, #ff3f81, #ff9b53);
+        box-shadow: 0 5px 14px rgba(255, 80, 120, 0.22);
     }
 
     .stButton > button:hover {
@@ -184,11 +246,16 @@ st.markdown(
         transform: translateY(-2px);
     }
 
-    div[data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.9);
-        border: 2px solid #e9e3ff;
-        border-radius: 18px;
-        padding: 12px;
+    @media (max-width: 900px) {
+        .weather-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .weather-main {
+            border-right: none;
+            padding-right: 0;
+            text-align: center;
+        }
     }
 
     footer {
@@ -201,7 +268,7 @@ st.markdown(
 
 
 # =========================================================
-# 서울 좌표
+# 서울 위치
 # =========================================================
 SEOUL_LATITUDE = 37.5665
 SEOUL_LONGITUDE = 126.9780
@@ -220,17 +287,12 @@ WEATHER_CODES = {
     51: ("약한 이슬비", "🌦️", "rainy"),
     53: ("이슬비", "🌦️", "rainy"),
     55: ("강한 이슬비", "🌧️", "rainy"),
-    56: ("어는 이슬비", "🌧️", "rainy"),
-    57: ("강한 어는 이슬비", "🌧️", "rainy"),
     61: ("약한 비", "🌧️", "rainy"),
     63: ("비", "🌧️", "rainy"),
     65: ("강한 비", "☔", "rainy"),
-    66: ("어는 비", "🌧️", "rainy"),
-    67: ("강한 어는 비", "🌧️", "rainy"),
     71: ("약한 눈", "🌨️", "snowy"),
     73: ("눈", "❄️", "snowy"),
     75: ("강한 눈", "☃️", "snowy"),
-    77: ("싸락눈", "🌨️", "snowy"),
     80: ("약한 소나기", "🌦️", "rainy"),
     81: ("소나기", "🌧️", "rainy"),
     82: ("강한 소나기", "☔", "rainy"),
@@ -238,35 +300,34 @@ WEATHER_CODES = {
     86: ("강한 눈보라", "☃️", "snowy"),
     95: ("천둥번개", "⛈️", "stormy"),
     96: ("우박을 동반한 천둥번개", "⛈️", "stormy"),
-    99: ("강한 우박과 천둥번개", "⛈️", "stormy"),
+    99: ("강한 천둥번개", "⛈️", "stormy"),
 }
 
 
 # =========================================================
 # 메뉴 데이터
-# 영양 정보는 일반적인 1인분 기준의 참고값입니다.
 # =========================================================
 MENU_DATA = {
     "hot": [
         {
+            "name": "포케",
+            "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+            "calories": 510,
+            "carbs": 62,
+            "protein": 31,
+            "fat": 17,
+            "sodium": 740,
+            "reason": "채소와 단백질을 골고루 먹을 수 있는 산뜻한 메뉴예요.",
+        },
+        {
             "name": "물냉면",
-            "image": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=900&q=80",
+            "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=900&q=80",
             "calories": 480,
             "carbs": 87,
             "protein": 18,
             "fat": 7,
             "sodium": 1450,
             "reason": "더운 날에는 시원하고 새콤한 냉면이 잘 어울려요.",
-        },
-        {
-            "name": "치킨 샐러드",
-            "image": "https://images.unsplash.com/photo-1546793665-c74683f339c1?auto=format&fit=crop&w=900&q=80",
-            "calories": 390,
-            "carbs": 24,
-            "protein": 36,
-            "fat": 17,
-            "sodium": 690,
-            "reason": "더운 날 가볍고 신선하게 즐기기 좋은 메뉴예요.",
         },
         {
             "name": "초밥",
@@ -279,14 +340,14 @@ MENU_DATA = {
             "reason": "깔끔하고 산뜻해서 더운 날에도 부담이 적어요.",
         },
         {
-            "name": "포케",
-            "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
-            "calories": 510,
-            "carbs": 62,
-            "protein": 31,
+            "name": "치킨 샐러드",
+            "image": "https://images.unsplash.com/photo-1546793665-c74683f339c1?auto=format&fit=crop&w=900&q=80",
+            "calories": 390,
+            "carbs": 24,
+            "protein": 36,
             "fat": 17,
-            "sodium": 740,
-            "reason": "채소와 단백질을 골고루 먹을 수 있어요.",
+            "sodium": 690,
+            "reason": "가볍고 신선하게 즐길 수 있는 건강한 메뉴예요.",
         },
     ],
     "cold": [
@@ -298,7 +359,7 @@ MENU_DATA = {
             "protein": 27,
             "fat": 21,
             "sodium": 1720,
-            "reason": "추운 날에는 얼큰하고 뜨끈한 찌개가 좋아요.",
+            "reason": "쌀쌀한 날에는 얼큰하고 뜨끈한 찌개가 좋아요.",
         },
         {
             "name": "칼국수",
@@ -311,16 +372,6 @@ MENU_DATA = {
             "reason": "따뜻한 국물과 부드러운 면이 추위를 녹여줘요.",
         },
         {
-            "name": "소고기전골",
-            "image": "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=80",
-            "calories": 590,
-            "carbs": 44,
-            "protein": 43,
-            "fat": 27,
-            "sodium": 1390,
-            "reason": "채소와 고기를 따뜻한 국물과 함께 즐겨보세요.",
-        },
-        {
             "name": "갈비탕",
             "image": "https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=900&q=80",
             "calories": 590,
@@ -329,6 +380,16 @@ MENU_DATA = {
             "fat": 24,
             "sodium": 1570,
             "reason": "진하고 따뜻한 국물이 몸을 든든하게 해줘요.",
+        },
+        {
+            "name": "소고기전골",
+            "image": "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=80",
+            "calories": 590,
+            "carbs": 44,
+            "protein": 43,
+            "fat": 27,
+            "sodium": 1390,
+            "reason": "채소와 고기를 따뜻한 국물과 함께 즐겨보세요.",
         },
     ],
     "rainy": [
@@ -545,7 +606,7 @@ MENU_DATA = {
 
 
 # =========================================================
-# 서울 날씨 가져오기
+# 날씨 API
 # =========================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def get_seoul_weather():
@@ -567,13 +628,9 @@ def get_seoul_weather():
 
     response = requests.get(url, params=params, timeout=10)
     response.raise_for_status()
-
     return response.json()
 
 
-# =========================================================
-# 날씨에 따른 메뉴 종류 선택
-# =========================================================
 def get_menu_category(weather_category, temperature):
     if weather_category in ["rainy", "snowy", "stormy"]:
         return weather_category
@@ -587,9 +644,6 @@ def get_menu_category(weather_category, temperature):
     return weather_category
 
 
-# =========================================================
-# 메뉴 3개 선택
-# =========================================================
 def get_recommendations(category):
     menus = MENU_DATA.get(category, MENU_DATA["sunny"])
     return random.sample(menus, 3)
@@ -603,7 +657,7 @@ if "recommendation_number" not in st.session_state:
 
 
 # =========================================================
-# 앱 제목
+# 화면 출력
 # =========================================================
 st.markdown(
     """
@@ -616,9 +670,6 @@ st.markdown(
 )
 
 
-# =========================================================
-# 날씨 확인 및 화면 출력
-# =========================================================
 try:
     with st.spinner("서울의 오늘 날씨를 확인하는 중이에요... ☁️"):
         weather_data = get_seoul_weather()
@@ -630,9 +681,7 @@ try:
         st.stop()
 
     temperature = float(current.get("temperature_2m", 0))
-    apparent_temperature = float(
-        current.get("apparent_temperature", temperature)
-    )
+    apparent_temperature = float(current.get("apparent_temperature", temperature))
     humidity = int(current.get("relative_humidity_2m", 0))
     precipitation = float(current.get("precipitation", 0))
     wind_speed = float(current.get("wind_speed_10m", 0))
@@ -644,35 +693,48 @@ try:
         ("알 수 없는 날씨", "🌈", "cloudy"),
     )
 
-    # 현재 날씨 카드
-    st.markdown(
+    weather_html = textwrap.dedent(
         f"""
         <div class="weather-card">
-            <div class="weather-icon">{weather_icon}</div>
-            <div class="location">📍 서울특별시</div>
-            <div class="weather-name">{weather_name}</div>
-            <div class="temperature">{temperature:.1f}℃</div>
-            <div class="weather-detail">
-                체감온도 {apparent_temperature:.1f}℃ ·
-                습도 {humidity}% ·
-                강수량 {precipitation:.1f}mm ·
-                풍속 {wind_speed:.1f}km/h
-            </div>
-            <div class="weather-detail" style="margin-top:8px;">
-                🕒 {current_time}
+            <div class="weather-layout">
+                <div class="weather-emoji">{weather_icon}</div>
+
+                <div class="weather-main">
+                    <div class="location">📍 서울특별시</div>
+                    <div class="weather-name">{weather_name}</div>
+                    <div class="temperature">{temperature:.1f}℃</div>
+                    <div class="feels-like">체감온도 {apparent_temperature:.1f}℃</div>
+                </div>
+
+                <div class="weather-details">
+                    <div class="detail-item">
+                        💧 습도
+                        <div class="detail-value">{humidity}%</div>
+                    </div>
+
+                    <div class="detail-item">
+                        🌧️ 강수량
+                        <div class="detail-value">{precipitation:.1f}mm</div>
+                    </div>
+
+                    <div class="detail-item">
+                        🌬️ 풍속
+                        <div class="detail-value">{wind_speed:.1f}km/h</div>
+                    </div>
+
+                    <div class="detail-item">
+                        🕒 업데이트
+                        <div class="detail-value" style="font-size:1rem;">
+                            {current_time}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """
+    ).strip()
 
-    # 날씨 상세 정보
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("🌡️ 현재 기온", f"{temperature:.1f}℃")
-    col2.metric("🤗 체감 온도", f"{apparent_temperature:.1f}℃")
-    col3.metric("💧 습도", f"{humidity}%")
-    col4.metric("🌬️ 풍속", f"{wind_speed:.1f}km/h")
+    st.markdown(weather_html, unsafe_allow_html=True)
 
     category = get_menu_category(weather_category, temperature)
 
@@ -687,18 +749,15 @@ try:
     }
 
     st.markdown(
-        f"""
-        <div class="recommend-title">
-            오늘의 추천 메뉴 💕<br>
-            <span style="font-size:1.1rem; color:#77778a;">
-                {category_messages.get(category)}
-            </span>
-        </div>
-        """,
+        '<div class="recommend-title">🍚 오늘의 추천 메뉴 💕</div>',
         unsafe_allow_html=True,
     )
 
-    # 같은 날씨에서도 버튼을 누르면 메뉴가 변경됨
+    st.markdown(
+        f'<div class="recommend-message">{category_messages.get(category)}</div>',
+        unsafe_allow_html=True,
+    )
+
     random.seed(
         f"{weather_code}-{round(temperature)}-"
         f"{st.session_state.recommendation_number}"
@@ -709,7 +768,7 @@ try:
 
     for column, menu in zip(menu_columns, recommendations):
         with column:
-            st.markdown(
+            menu_card = textwrap.dedent(
                 f"""
                 <div class="food-card">
                     <img
@@ -724,37 +783,38 @@ try:
                         {menu['reason']}
                     </div>
 
-                    <div style="text-align:center;">
+                    <div class="calorie-wrapper">
                         <span class="calorie">
                             🔥 약 {menu['calories']} kcal
                         </span>
                     </div>
 
-                    <div class="nutrition-grid">
-                        <div class="nutrition-item">
-                            🍚 탄수화물<br>
-                            <b>{menu['carbs']}g</b>
+                    <div class="nutrition-list">
+                        <div class="nutrition-row">
+                            <span>🍚 탄수화물</span>
+                            <strong>{menu['carbs']}g</strong>
                         </div>
 
-                        <div class="nutrition-item">
-                            🥩 단백질<br>
-                            <b>{menu['protein']}g</b>
+                        <div class="nutrition-row">
+                            <span>🥩 단백질</span>
+                            <strong>{menu['protein']}g</strong>
                         </div>
 
-                        <div class="nutrition-item">
-                            🥑 지방<br>
-                            <b>{menu['fat']}g</b>
+                        <div class="nutrition-row">
+                            <span>🥑 지방</span>
+                            <strong>{menu['fat']}g</strong>
                         </div>
 
-                        <div class="nutrition-item">
-                            🧂 나트륨<br>
-                            <b>{menu['sodium']}mg</b>
+                        <div class="nutrition-row">
+                            <span>🧂 나트륨</span>
+                            <strong>{menu['sodium']}mg</strong>
                         </div>
                     </div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                """
+            ).strip()
+
+            st.markdown(menu_card, unsafe_allow_html=True)
 
     st.write("")
 
@@ -765,8 +825,8 @@ try:
     st.markdown(
         """
         <div class="notice">
-            💡 칼로리와 영양소는 일반적인 1인분을 기준으로 한
-            참고용 수치입니다. 재료와 조리 방법에 따라 달라질 수 있어요.
+            💡 칼로리와 영양소는 일반적인 1인분을 기준으로 한 참고용 수치입니다.
+            재료와 조리 방법에 따라 달라질 수 있어요.
         </div>
         """,
         unsafe_allow_html=True,

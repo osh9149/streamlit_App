@@ -18,7 +18,7 @@ st.set_page_config(
 # =========================================================
 # 화면 디자인
 # =========================================================
-st.markdown(
+st.html(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
@@ -263,7 +263,6 @@ st.markdown(
     }
     </style>
     """,
-    unsafe_allow_html=True,
 )
 
 
@@ -659,14 +658,13 @@ if "recommendation_number" not in st.session_state:
 # =========================================================
 # 화면 출력
 # =========================================================
-st.markdown(
+st.html(
     """
     <div class="main-title">🍽️ 오늘 뭐 먹지? 🌈</div>
     <div class="sub-title">
         서울의 오늘 날씨에 딱 맞는 메뉴를 추천해 드려요!
     </div>
     """,
-    unsafe_allow_html=True,
 )
 
 
@@ -734,7 +732,7 @@ try:
         """
     ).strip()
 
-    st.markdown(weather_html, unsafe_allow_html=True)
+    st.html(weather_html)
 
     category = get_menu_category(weather_category, temperature)
 
@@ -748,15 +746,13 @@ try:
         "stormy": "집에서 편안하게 즐기기 좋은 메뉴예요! ⚡",
     }
 
-    st.markdown(
+    st.html(
         '<div class="recommend-title">🍚 오늘의 추천 메뉴 💕</div>',
-        unsafe_allow_html=True,
-    )
+)
 
-    st.markdown(
+    st.html(
         f'<div class="recommend-message">{category_messages.get(category)}</div>',
-        unsafe_allow_html=True,
-    )
+)
 
     random.seed(
         f"{weather_code}-{round(temperature)}-"
@@ -814,7 +810,7 @@ try:
                 """
             ).strip()
 
-            st.markdown(menu_card, unsafe_allow_html=True)
+            st.html(menu_card)
 
     st.write("")
 
@@ -822,15 +818,14 @@ try:
         st.session_state.recommendation_number += 1
         st.rerun()
 
-    st.markdown(
+    st.html(
         """
         <div class="notice">
             💡 칼로리와 영양소는 일반적인 1인분을 기준으로 한 참고용 수치입니다.
             재료와 조리 방법에 따라 달라질 수 있어요.
         </div>
         """,
-        unsafe_allow_html=True,
-    )
+)
 
 except requests.exceptions.Timeout:
     st.error("날씨 서버의 응답이 늦어지고 있습니다. 다시 시도해 주세요.")

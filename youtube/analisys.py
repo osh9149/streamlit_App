@@ -2,6 +2,7 @@ import streamlit as st
 from googleapiclient.discovery import build
 import pandas as pd
 import re
+import os
 from datetime import datetime
 import plotly.express as px
 from wordcloud import WordCloud
@@ -109,7 +110,7 @@ else:
                 if df.empty:
                     st.info("수집된 댓글이 없거나, API 키 설정을 다시 확인해 주세요.")
                 else:
-                    # 데이터 전처리
+                    # 데이터 전처리 (시간대 설정)
                     df['published_at'] = pd.to_datetime(df['published_at'])
                     df['published_at'] = df['published_at'].dt.tz_convert('Asia/Seoul')
                     df['date'] = df['published_at'].dt.date
@@ -158,60 +159,63 @@ else:
                         fig_hourly.update_layout(xaxis=dict(tickmode='linear', tick0=0, dtick=2))
                         st.plotly_chart(fig_hourly, use_container_width=True)
 
-                   # ---------------------------------------------------------
-# 우측 열: 워드클라우드 코드 안전화 버전 (절대 경로 및 폴백 적용)
-# ---------------------------------------------------------
-st.subheader("🔤 자주 등장하는 핵심 단어 (Word Cloud)")
-
-cleaned_texts = df['text'].apply(clean_text)
-all_text = " ".join(cleaned_texts)
-
-if len(all_text.strip()) < 5:
-    st.write("워드클라우드를 생성할 만큼 충분한 텍스트 데이터가 없습니다.")
-else:
-    import os
-    
-    # 1. 실행 파일(analisys.py) 기준으로 폰트 파일의 절대 경로를 계산합니다.
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    font_file_name = "NanumGothic.ttf"
-    font_path = os.path.join(current_dir, font_file_name)
-    
-    # 만약 파일이 같은 폴더가 아닌 한 단계 상위 등에 있다면 수동 검사
-    if not os.path.exists(font_path):
-        # 대안 경로: 작업 디렉토리 기준
-        font_path = os.path.join(os.getcwd(), font_file_name)
-
-    # 2. 폰트 존재 여부에 따른 안전한 워드클라우드 빌드
-    try:
-        if os.path.exists(font_path):
-            # 한글 폰트가 정상 존재할 때
-            wordcloud = WordCloud(
-                font_path=font_path,
-                width=800, 
-                height=400,
-                background_color='white',
-                colormap='viridis',
-                max_words=100
-            ).generate(all_text)
-        else:
-            # 폰트가 누락되었을 때 앱이 죽는 것을 방지하기 위해 기본 시스템 폰트로 렌더링 (한글은 깨질 수 있음)
-            st.warning(f"⚠️ `{font_file_name}` 파일을 찾을 수 없어 기본 폰트로 렌더링합니다. (경로 확인 요망: {font_path})")
-            wordcloud = WordCloud(
-                width=800, 
-                height=400,
-                background_color='white',
-                colormap='viridis',
-                max_words=100
-            ).generate(all_text)
-            
-        # Matplotlib 출력
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.imshow(wordcloud, interpolation='bilinear')
-        ax.axis('off')
-        st.pyplot(fig)
-        
-    except Exception as e:
-        st.error(f"워드클라우드 생성 중 오류 발생: {e}")
+                    # ---------------------------------------------------------
+                    # 우측 열: 반응도(좋아요) 및 워드클라우드
+                    # ---------------------------------------------------------
+                    with right_column:
+                        st.subheader("❤️ 댓글 반응도 분석")
+                        
+                        # 좋아요 수 기준 Top 5 댓글
+                        top_comments = df.sort_values(by='like_count', ascending=False).head(5)
+                        st.write("👍 **가장 반응이 좋았던 댓글 Top 5**")
+                        for idx, row in top_comments.iterrows():
+                            st.info(f"**{row['author']}** (좋아요 {row['like_count']}개)\n\n{row['text']}")
+                        
+                        st.markdown("---")
+                        
+                        st.subheader("🔤 자주 등장하는 핵심 단어 (Word Cloud)")
+                        
+                        cleaned_texts = df['text'].apply(clean_text)
+                        all_text = " ".join(cleaned_texts)
+                        
+                        if len(all_text.strip()) < 5:
+                            st.write("워드클라우드를 생성할 만큼 충분한 텍스트 데이터가 없습니다.")
+                        else:
+                            # 폰트 파일 탐색 및 절대 경로 설정
+                            current_dir = os.path.dirname(os.path.abspath(__file__))
+                            font_file_name = "NanumGothic.ttf"
+                            font_path = os.path.join(current_dir, font_file_name)
+                            
+                            if not os.path.exists(font_path):
+                                font_path = os.path.join(os.getcwd(), font_file_name)
+                            
+                            try:
+                                # 한글 폰트가 정상적으로 감지되었을 때 실행
+                                if os.path.exists(font_path):
+                                    wordcloud = WordCloud(
+                                        font_path=font_path,
+                                        width=800, height=400,
+                                        background_color='white',
+                                        colormap='viridis',
+                                        max_words=100
+                                    ).generate(all_text)
+                                else:
+                                    # 폰트 파일이 없을 경우 예외 방지를 위해 기본 폰트로 실행 (한글 깨짐 발생 주의 알림)
+                                    st.warning(f"⚠️ `{font_file_name}` 파일을 찾을 수 없어 기본 폰트로 렌더링합니다.\n\n폰트가 프로젝트 최상단 폴더에 업로드되었는지 확인해 주세요.")
+                                    wordcloud = WordCloud(
+                                        width=800, height=400,
+                                        background_color='white',
+                                        colormap='viridis',
+                                        max_words=100
+                                    ).generate(all_text)
+                                
+                                fig, ax = plt.subplots(figsize=(10, 5))
+                                ax.imshow(wordcloud, interpolation='bilinear')
+                                ax.axis('off')
+                                st.pyplot(fig)
+                                
+                            except Exception as e:
+                                st.error(f"워드클라우드 생성 과정에서 오류가 발생했습니다: {e}")
                             
                     # ---------------------------------------------------------
                     # 최하단: 원본 데이터 테이블 제공

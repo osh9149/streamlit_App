@@ -6,14 +6,14 @@ import re
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-# 페이지 기본 설정 (5x5 배치를 위해 와이드 레이아웃 적용)
+# 페이지 기본 설정
 st.set_page_config(
     page_title="My Constellation - 5x5 역량 별자리 관측소",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 깊은 밤하늘 느낌의 우주 테마 CSS 스타일 적용
+# 밤하늘 테마 CSS 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap');
@@ -57,7 +57,7 @@ st.markdown("""
 
 
 # ==========================================
-# 1. 구글 시트 데이터 연동 로직
+# 1. 구글 시트 데이터 연동 로직 (안전성 강화)
 # ==========================================
 
 def extract_sheets_id(url):
@@ -75,32 +75,53 @@ def load_data_from_google_sheet(sheets_url):
         creds = service_account.Credentials.from_service_account_info(creds_info)
         service = build('sheets', 'v4', credentials=creds)
         
-        # 이름, 학교 데이터 및 C열~H열 역량 데이터 전체를 안전하게 가져옵니다.
+        # 1. 시트의 정확한 탭 이름(첫 번째 시트명)을 먼저 가져옵니다.
+        spreadsheet = service.spreadsheets().get(spreadsheetId=sheets_id).execute()
+        sheets = spreadsheet.get('sheets', [])
+        if not sheets:
+            st.sidebar.error("구글 시트 내에 탭을 찾을 수 없습니다.")
+            return None
+        first_sheet_name = sheets[0]['properties']['title']
+        
+        # 2. 첫 번째 탭의 A1:H100 데이터 호출
         result = service.spreadsheets().values().get(
             spreadsheetId=sheets_id,
-            range="디지털 교육 역량 자가진단 데이터!A1:H26"  # 제공된 시트 명칭 반영
+            range=f"'{first_sheet_name}'!A1:H100"
         ).execute()
         
         values = result.get('values', [])
         if not values or len(values) < 2:
+            st.sidebar.warning("시트에 읽어올 데이터 행이 부족합니다. (최소 헤더 포함 2줄 이상 필요)")
             return None
             
-        # 첫 번째 행을 컬럼명으로 처리
-        headers = values[0]
-        df = pd.DataFrame(values[1:], columns=headers)
+        # 3. 데이터 행들의 열 개수가 일치하는지 확인 및 패딩 처리
+        max_cols = max(len(row) for row in values)
+        if max_cols < 8:
+            st.sidebar.error(f"시트의 열 개수가 부족합니다. (현재 최대 열 개수: {max_cols}개, 최소 8개 열 필요: 이름, 학교, A~F)")
+            return None
+
+        # 모든 행의 길이를 동일하게 맞춰 데이터프레임 빌드 시 에러 방지
+        sanitized_values = []
+        for row in values:
+            if len(row) < max_cols:
+                row = row + [""] * (max_cols - len(row))
+            sanitized_values.append(row[:max_cols])
+
+        headers = [h.strip() for h in sanitized_values[0]]
+        df = pd.DataFrame(sanitized_values[1:], columns=headers)
         
-        # 제공된 시트 구조와 매핑: C열[2]부터 H열[7]까지 순서대로 A~F 매칭
-        # 사용자가 편하게 인덱싱할 수 있도록 알파벳 컬럼 가상 매핑
-        df['A_score'] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(1.0) # C열
-        df['B_score'] = pd.to_numeric(df.iloc[:, 3], errors='coerce').fillna(1.0) # D열
-        df['C_score'] = pd.to_numeric(df.iloc[:, 4], errors='coerce').fillna(1.0) # E열
-        df['D_score'] = pd.to_numeric(df.iloc[:, 5], errors='coerce').fillna(1.0) # F열
-        df['E_score'] = pd.to_numeric(df.iloc[:, 6], errors='coerce').fillna(1.0) # G열
-        df['F_score'] = pd.to_numeric(df.iloc[:, 7], errors='coerce').fillna(1.0) # H열
+        # C열(인덱스 2)부터 H열(인덱스 7)까지 숫자로 안전하게 파싱
+        df['A_score'] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(1.0)
+        df['B_score'] = pd.to_numeric(df.iloc[:, 3], errors='coerce').fillna(1.0)
+        df['C_score'] = pd.to_numeric(df.iloc[:, 4], errors='coerce').fillna(1.0)
+        df['D_score'] = pd.to_numeric(df.iloc[:, 5], errors='coerce').fillna(1.0)
+        df['E_score'] = pd.to_numeric(df.iloc[:, 6], errors='coerce').fillna(1.0)
+        df['F_score'] = pd.to_numeric(df.iloc[:, 7], errors='coerce').fillna(1.0)
         
         return df
     except Exception as e:
-        st.sidebar.error(f"구글 시트 연동 실패: {e}")
+        st.sidebar.error(f"구글 시트 연동 실패 원인: {e}")
+        st.sidebar.info("💡 해결 가이드: '공유' 버튼을 눌러 서비스 계정 이메일(slides-reader@...)이 '뷰어'로 추가되어 있는지 다시 한 번 확인해 주세요.")
         return None
 
 
@@ -116,14 +137,14 @@ def draw_beautiful_constellation(name, scores):
     }
     
     r_values = [scores[cat] for cat in ['A', 'B', 'C', 'D', 'E', 'F', 'A']]
-    g_score = 5.0  # 메타 역량 보호막은 최고점(5.0) 크기로 전체를 감싸 안음
+    g_score = 5.0  
     
     max_cat = max(['A', 'B', 'C', 'D', 'E', 'F'], key=lambda k: scores[k])
     min_cat = min(['A', 'B', 'C', 'D', 'E', 'F'], key=lambda k: scores[k])
     
     fig = go.Figure()
     
-    # 🌌 1. G역량 메타 보호막 (배경 구체 보호막)
+    # G역량 메타 보호막
     fig.add_trace(go.Scatterpolar(
         r=[g_score]*7, theta=categories, fill='toself',
         fillcolor='rgba(139, 92, 246, 0.05)',
@@ -131,7 +152,7 @@ def draw_beautiful_constellation(name, scores):
         showlegend=False, hoverinfo='skip'
     ))
     
-    # ✨ 2. 나의 별자리 디자인 (A~F 연결)
+    # 핵심 별자리
     fig.add_trace(go.Scatterpolar(
         r=r_values, theta=categories, fill='toself',
         fillcolor='rgba(56, 189, 248, 0.18)', line=dict(color='#38BDF8', width=2),
@@ -145,7 +166,6 @@ def draw_beautiful_constellation(name, scores):
         hoverinfo='text'
     ))
     
-    # 5x5 컴팩트 배치를 위해 마진 및 글자 크기 최적화
     fig.update_layout(
         polar=dict(
             bgcolor='rgb(9, 13, 24)',
@@ -159,16 +179,14 @@ def draw_beautiful_constellation(name, scores):
 
 
 # ==========================================
-# 3. Streamlit 대시보드 렌더링 (5x5 그리드)
+# 3. Streamlit 대시보드 렌더링
 # ==========================================
 
 st.title("🌌 25인 자가진단 역량 별자리 [5 × 5 한눈에 보기]")
-st.markdown("구글 스프레드시트의 **C열~H열 점수**를 기반으로 25명 전체의 디지털 자가진단 궤도를 5x5 스크린으로 일괄 관측합니다.")
+st.markdown("구글 스프레드시트의 데이터를 실시간 매핑하여 밤하늘의 고유 성좌 지도를 구성합니다.")
 
-# 사이드바 설정
 st.sidebar.header("🛸 별 관측 제어판")
-use_demo = st.sidebar.checkbox("🎁 25인 가상 데모 시뮬레이션", value=True, 
-                               help="체크를 풀고 구글 시트 주소를 넣으면 실제 연동이 시작됩니다.")
+use_demo = st.sidebar.checkbox("🎁 25인 가상 데모 시뮬레이션", value=True)
 
 sheets_url = ""
 df_data = None
@@ -176,15 +194,16 @@ df_data = None
 if not use_demo:
     sheets_url = st.sidebar.text_input("📂 구글 스프레드시트 링크 입력", value="https://docs.google.com/spreadsheets/d/1oITSnXoXMDP8Dbs_L5ZLvwRbhYB6qm2fruyjES3jDfM/edit?usp=sharing")
     if sheets_url:
-        with st.spinner("구글 시트 연동 및 역량 매핑 시스템 기동 중..."):
+        with st.spinner("구글 데이터 허브 동기화 중..."):
             df_data = load_data_from_google_sheet(sheets_url)
+    else:
+        st.warning("👈 왼쪽 제어판에 구글 스프레드시트 주소를 붙여넣어 주세요.")
 else:
-    st.sidebar.success("현재 시뮬레이션 데이터가 활성화되었습니다.")
-    # 25인 난수 데이터 실시간 생성
+    st.sidebar.success("현재 데모 데이터가 작동 중입니다.")
     demo_rows = []
     for i in range(1, 26):
         demo_rows.append({
-            "이름": f"교사 {i:02d}", "학교": "선도학교",
+            "이름": f"참여자 {i:02d}", "학교": "선도학교",
             "A_score": np.round(np.random.uniform(2.0, 5.0), 1), "B_score": np.round(np.random.uniform(2.0, 5.0), 1),
             "C_score": np.round(np.random.uniform(2.0, 5.0), 1), "D_score": np.round(np.random.uniform(2.0, 5.0), 1),
             "E_score": np.round(np.random.uniform(2.0, 5.0), 1), "F_score": np.round(np.random.uniform(2.0, 5.0), 1)
@@ -192,24 +211,26 @@ else:
     df_data = pd.DataFrame(demo_rows)
 
 if df_data is not None:
-    # 25명 데이터 규격 맞춤 슬라이싱 (데이터가 더 많아도 딱 25명만 표시되도록 안전 바운딩)
+    # 안전하게 최대 25명까지만 컷팅
     df_data = df_data.head(25)
+    total_records = len(df_data)
     
-    st.success(f"📊 {len(df_data)}명의 역량 데이터 레코드가 5×5 은하 지도에 매핑되었습니다.")
+    st.success(f"📊 {total_records}명의 데이터 궤도가 정밀 동기화되었습니다.")
     
-    # 정밀한 5열(5 columns) 격자 구성
+    with st.expander("📂 로드된 데이터프레임 검증 테이블"):
+        st.dataframe(df_data, use_container_width=True)
+    
+    # 5열 그리드 구성
     grid_cols = st.columns(5)
     
     for idx, row in df_data.iterrows():
-        # idx % 5 구조를 이용하여 한 줄에 정확히 5개씩 나누어 할당
         col = grid_cols[idx % 5]
         
         with col:
-            # 이름 데이터 파싱 (시트에 이름 열이 비어있다면 순번 처리)
-            raw_name = row.get("이름", "")
-            name = raw_name if (raw_name and str(raw_name).strip() != "") else f"참여자 {idx+1:02d}"
+            # 첫 번째 열(이름) 추출 안전 예외 처리
+            name_val = row.iloc[0]
+            name = str(name_val).strip() if (pd.notna(name_val) and str(name_val).strip() != "") else f"참여자 {idx+1:02d}"
             
-            # 가상 컬럼에서 A~F 점수 딕셔너리 빌드
             scores = {
                 'A': float(row['A_score']),
                 'B': float(row['B_score']),
@@ -219,20 +240,16 @@ if df_data is not None:
                 'F': float(row['F_score'])
             }
             
-            # 별자리 드로잉
             fig, max_cat, min_cat, comp_names = draw_beautiful_constellation(name, scores)
             
-            # 카드 상단 네임 태그
             st.markdown(f"""
             <div class="card">
                 <div class="card-title">✨ {name}</div>
             </div>
             """, unsafe_allow_html=True)
             
-            # 레이더 차트 플로팅
             st.plotly_chart(fig, use_container_width=True, key=f"grid_chart_{idx}", config={'displayModeBar': False})
             
-            # 강점 / 보완점 압축 리포트 (5x5 화면에 맞춰 글자 크기 축소 최적화)
             st.markdown(f"""
             <div class="report-box">
                 🥇 <b style="color:#FBBF24;">강점:</b> {max_cat} ({scores[max_cat]}점)<br/>

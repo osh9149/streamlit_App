@@ -50,14 +50,14 @@ st.markdown("""
         margin-bottom: 20px; 
         font-size: 11px; 
         color: #E2E8F0;
-        line-height: 1.4;
+        line-height: 1.5;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ==========================================
-# 1. 구글 시트 데이터 연동 로직 (안전성 강화)
+# 1. 구글 시트 데이터 연동 로직
 # ==========================================
 
 def extract_sheets_id(url):
@@ -75,7 +75,6 @@ def load_data_from_google_sheet(sheets_url):
         creds = service_account.Credentials.from_service_account_info(creds_info)
         service = build('sheets', 'v4', credentials=creds)
         
-        # 1. 시트의 정확한 탭 이름(첫 번째 시트명)을 먼저 가져옵니다.
         spreadsheet = service.spreadsheets().get(spreadsheetId=sheets_id).execute()
         sheets = spreadsheet.get('sheets', [])
         if not sheets:
@@ -83,7 +82,6 @@ def load_data_from_google_sheet(sheets_url):
             return None
         first_sheet_name = sheets[0]['properties']['title']
         
-        # 2. 첫 번째 탭의 A1:H100 데이터 호출
         result = service.spreadsheets().values().get(
             spreadsheetId=sheets_id,
             range=f"'{first_sheet_name}'!A1:H100"
@@ -91,16 +89,14 @@ def load_data_from_google_sheet(sheets_url):
         
         values = result.get('values', [])
         if not values or len(values) < 2:
-            st.sidebar.warning("시트에 읽어올 데이터 행이 부족합니다. (최소 헤더 포함 2줄 이상 필요)")
+            st.sidebar.warning("시트에 읽어올 데이터 행이 부족합니다.")
             return None
             
-        # 3. 데이터 행들의 열 개수가 일치하는지 확인 및 패딩 처리
         max_cols = max(len(row) for row in values)
         if max_cols < 8:
-            st.sidebar.error(f"시트의 열 개수가 부족합니다. (현재 최대 열 개수: {max_cols}개, 최소 8개 열 필요: 이름, 학교, A~F)")
+            st.sidebar.error(f"시트의 열 개수가 부족합니다. (최소 8개 열 필요)")
             return None
 
-        # 모든 행의 길이를 동일하게 맞춰 데이터프레임 빌드 시 에러 방지
         sanitized_values = []
         for row in values:
             if len(row) < max_cols:
@@ -110,7 +106,6 @@ def load_data_from_google_sheet(sheets_url):
         headers = [h.strip() for h in sanitized_values[0]]
         df = pd.DataFrame(sanitized_values[1:], columns=headers)
         
-        # C열(인덱스 2)부터 H열(인덱스 7)까지 숫자로 안전하게 파싱
         df['A_score'] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(1.0)
         df['B_score'] = pd.to_numeric(df.iloc[:, 3], errors='coerce').fillna(1.0)
         df['C_score'] = pd.to_numeric(df.iloc[:, 4], errors='coerce').fillna(1.0)
@@ -121,7 +116,6 @@ def load_data_from_google_sheet(sheets_url):
         return df
     except Exception as e:
         st.sidebar.error(f"구글 시트 연동 실패 원인: {e}")
-        st.sidebar.info("💡 해결 가이드: '공유' 버튼을 눌러 서비스 계정 이메일(slides-reader@...)이 '뷰어'로 추가되어 있는지 다시 한 번 확인해 주세요.")
         return None
 
 
@@ -131,9 +125,15 @@ def load_data_from_google_sheet(sheets_url):
 
 def draw_beautiful_constellation(name, scores):
     categories = ['A', 'B', 'C', 'D', 'E', 'F', 'A']
+    
+    # 💡 번호 대신 매핑되어 표출될 실제 역량 이름들
     comp_names = {
-        'A': 'A. 교육 이해', 'B': 'B. 윤리적 실천', 'C': 'C. 수업·학습자 분석',
-        'D': 'D. 설계', 'E': 'E. 실행', 'F': 'F. 평가'
+        'A': '교육 이해', 
+        'B': '윤리적 실천', 
+        'C': '수업·학습자 분석',
+        'D': '설계', 
+        'E': '실행', 
+        'F': '평가'
     }
     
     r_values = [scores[cat] for cat in ['A', 'B', 'C', 'D', 'E', 'F', 'A']]
@@ -211,7 +211,6 @@ else:
     df_data = pd.DataFrame(demo_rows)
 
 if df_data is not None:
-    # 안전하게 최대 25명까지만 컷팅
     df_data = df_data.head(25)
     total_records = len(df_data)
     
@@ -227,7 +226,6 @@ if df_data is not None:
         col = grid_cols[idx % 5]
         
         with col:
-            # 첫 번째 열(이름) 추출 안전 예외 처리
             name_val = row.iloc[0]
             name = str(name_val).strip() if (pd.notna(name_val) and str(name_val).strip() != "") else f"참여자 {idx+1:02d}"
             
@@ -250,9 +248,10 @@ if df_data is not None:
             
             st.plotly_chart(fig, use_container_width=True, key=f"grid_chart_{idx}", config={'displayModeBar': False})
             
+            # 💡 하단 리포트 박스에서 알파벳 코드 대신 한글 역량명이 매핑되어 출력되도록 수정 완료!
             st.markdown(f"""
             <div class="report-box">
-                🥇 <b style="color:#FBBF24;">강점:</b> {max_cat} ({scores[max_cat]}점)<br/>
-                🎯 <b style="color:#F87171;">보완:</b> {min_cat} ({scores[min_cat]}점)
+                🥇 <b style="color:#FBBF24;">강점:</b> {comp_names[max_cat]} ({scores[max_cat]}점)<br/>
+                🎯 <b style="color:#F87171;">보완:</b> {comp_names[min_cat]} ({scores[min_cat]}점)
             </div>
             """, unsafe_allow_html=True)

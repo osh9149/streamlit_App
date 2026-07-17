@@ -366,4 +366,4 @@ if slides_data:
                     </div>
                 </div>
             </div>
-            """, unsafe_style=html=True)
+            """, unsafe_style_html=True)

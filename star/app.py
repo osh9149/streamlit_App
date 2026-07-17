@@ -341,7 +341,7 @@ if slides_data:
             <div class="card">
                 <div class="card-title">⭐ {student['title']} 님의 은하 궤도</div>
             </div>
-            """, unsafe_style_html=True)
+            """, unsafe_allow_html=True) # <-- unsafe_allow_html 로 오류 수정 완료!
             
             # 레이더 별자리 차트 생성 및 출력
             fig, max_cat, min_cat, comp_names = draw_beautiful_constellation(student['title'], student['scores'])
@@ -366,4 +366,4 @@ if slides_data:
                     </div>
                 </div>
             </div>
-            """, unsafe_style_html=True)
+            """, unsafe_allow_html=True) # <-- unsafe_allow_html 로 오류 수정 완료!

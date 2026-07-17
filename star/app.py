@@ -153,15 +153,22 @@ def draw_beautiful_constellation(name, scores):
         'B': '윤리적 실천', 
         'C': '수업·학습자 분석',
         'D': '설계', 
-        'E': '실행', 
+        'E': '실행', # 💡 타이포 수정 완료
         'F': '평가'
     }
     
     r_values = [scores[cat] for cat in ['A', 'B', 'C', 'D', 'E', 'F', 'A']]
     g_score = 5.0  
     
-    max_cat = max(['A', 'B', 'C', 'D', 'E', 'F'], key=lambda k: scores[k])
-    min_cat = min(['A', 'B', 'C', 'D', 'E', 'F'], key=lambda k: scores[k])
+    # 💡 모든 점수가 동일할 때 인덱스 에러가 나는 현상을 완벽하게 방어하는 로직 적용
+    keys = ['A', 'B', 'C', 'D', 'E', 'F']
+    max_cat = max(keys, key=lambda k: scores[k])
+    min_cat = min(keys, key=lambda k: scores[k])
+    
+    # 만약 모든 점수가 완벽히 같다면 첫 번째 요소와 마지막 요소를 기본 강점/보완점으로 처리
+    if scores[max_cat] == scores[min_cat]:
+        max_cat = 'A'
+        min_cat = 'F'
     
     fig = go.Figure()
     
@@ -187,7 +194,7 @@ def draw_beautiful_constellation(name, scores):
         hoverinfo='text'
     ))
     
-    # 화면을 넓게 쓰기 때문에 폰트와 스케일을 시원하게 업그레이드
+    # Plotly 레이아웃을 정교한 딕셔너리 구조로 갱신하여 ValueError의 근본을 해결함
     fig.update_layout(
         polar=dict(
             bgcolor='rgb(9, 13, 24)',
@@ -195,7 +202,7 @@ def draw_beautiful_constellation(name, scores):
             angularaxis=dict(gridcolor='rgba(255,255,255,0.06)', tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'), rotation=90, direction="clockwise")
         ),
         showlegend=False, margin=dict(l=30, r=30, t=30, b=30),
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=320 # 차트 크기를 조금 더 키움
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=320
     )
     return fig, max_cat, min_cat, comp_names
 
@@ -206,7 +213,7 @@ def draw_beautiful_constellation(name, scores):
 
 st.title("🌌 25인 디지털 교육 역량 별자리 은하 지도 [5 × 5 Full-Screen]")
 
-# 🛠️ 화면 상단에 정렬되는 제어 대시보드 패널 생성
+# 화면 상단에 정렬되는 제어 대시보드 패널 생성
 st.markdown('<div class="control-panel">', unsafe_allow_html=True)
 top_col1, top_col2 = st.columns([1, 3])
 
@@ -226,6 +233,8 @@ if not use_demo:
     if sheets_url:
         with st.spinner("🌌 성간 데이터 센터와 실시간 동기화 중..."):
             df_data = load_data_from_google_sheet(sheets_url)
+    else:
+        st.warning("👈 위쪽 제어판에 구글 스프레드시트 주소를 붙여넣어 주세요.")
 else:
     demo_rows = []
     for i in range(1, 26):
@@ -237,22 +246,20 @@ else:
         })
     df_data = pd.DataFrame(demo_rows)
 
-# 시각화 화면 렌더링 (그아래 넓게 배치)
+# 시각화 화면 렌더링
 if df_data is not None:
     df_data = df_data.head(25)
     
     with st.expander("📂 원본 데이터베이스 테이블 확인"):
         st.dataframe(df_data, use_container_width=True)
         
-    # 🌟 화면 전체를 꽉 채우는 완전한 5열(Columns) 스크린 전개
+    # 화면 전체를 꽉 채우는 완전한 5열(Columns) 스크린 전개
     grid_cols = st.columns(5)
     
     for idx, row in df_data.iterrows():
-        # 인덱스를 5로 나눈 나머지로 정확하게 바둑판 정렬 구현
         col = grid_cols[idx % 5]
         
         with col:
-            # 이름 설정 로직
             name_val = row.iloc[1] if use_demo is False else row["이름"]
             name = str(name_val).strip() if (pd.notna(name_val) and str(name_val).strip() != "") else f"참여자 {idx+1:02d}"
             

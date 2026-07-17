@@ -143,10 +143,11 @@ def load_data_from_google_sheet(sheets_url):
 
 
 # ==========================================
-# 2. 풀 스크린 5x5 그리드용 별자리 시각화 엔진
+# 2. 풀 스크린 5x5 그리드용 별자리 시각화 엔진 (안전 설계 구조)
 # ==========================================
 
 def draw_beautiful_constellation(name, scores):
+    # 레이더 고리를 완전히 닫기 위해 마지막 인덱스에 A 추가
     categories = ['A', 'B', 'C', 'D', 'E', 'F', 'A']
     
     comp_names = {
@@ -165,25 +166,31 @@ def draw_beautiful_constellation(name, scores):
     max_cat = max(keys, key=lambda k: scores[k])
     min_cat = min(keys, key=lambda k: scores[k])
     
-    # 동점 발생 시 인덱스 오류 방지를 위한 예외 처리
+    # 동점 발생 예외 처리 방어
     if scores[max_cat] == scores[min_cat]:
         max_cat = 'A'
         min_cat = 'F'
     
     fig = go.Figure()
     
-    # G역량 메타 보호막 (배경 구체 보호막)
+    # 🌌 1. G역량 메타 보호막 (배경 구체 보호막)
     fig.add_trace(go.Scatterpolar(
-        r=[g_score]*7, theta=categories, fill='toself',
+        r=[g_score]*7, 
+        theta=categories, 
+        fill='toself',
         fillcolor='rgba(139, 92, 246, 0.05)',
         line=dict(color='rgba(167, 139, 250, 0.3)', width=1.5, dash='dot'),
-        showlegend=False, hoverinfo='skip'
+        showlegend=False, 
+        hoverinfo='skip'
     ))
     
-    # 핵심 별자리 드로잉 (A~F)
+    # ✨ 2. 핵심 별자리 궤도 드로잉 (A~F)
     fig.add_trace(go.Scatterpolar(
-        r=r_values, theta=categories, fill='toself',
-        fillcolor='rgba(56, 189, 248, 0.18)', line=dict(color='#38BDF8', width=2.5),
+        r=r_values, 
+        theta=categories, 
+        fill='toself',
+        fillcolor='rgba(56, 189, 248, 0.18)', 
+        line=dict(color='#38BDF8', width=2.5),
         mode='lines+markers',
         marker=dict(
             size=[11 if c == max_cat else 6 for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
@@ -194,31 +201,30 @@ def draw_beautiful_constellation(name, scores):
         hoverinfo='text'
     ))
     
-    # 최신 버전에 호환되는 중첩 dict 형태의 정석적 레이아웃 정의 (ValueError 해결)
+    # 🛠️ [에러 해결 해결책] 복잡한 중첩 구조 대신 개별 전용 레이아웃 API 함수를 나눠서 세팅합니다.
     fig.update_layout(
-        polar=dict(
-            bgcolor='rgb(9, 13, 24)',
-            radialaxis=dict(
-                visible=True,
-                range=[0, 5.2],
-                showline=False,
-                gridcolor='rgba(255, 255, 255, 0.06)',
-                angle=90,
-                tickfont=dict(color='gray', size=9)
-            ),
-            angularaxis=dict(
-                gridcolor='rgba(255, 255, 255, 0.06)',
-                tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
-                rotation=90,
-                direction="clockwise"
-            )
-        ),
         showlegend=False,
         margin=dict(l=30, r=30, t=30, b=30),
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        height=320 # 5x5 환경에서 큼직하게 보이도록 높이 상향 설정
+        height=320
     )
+    
+    # polar 서브 시스템만 완벽하게 별도 단층 제어하여 데이터 충돌 차단
+    fig.update_scenes()
+    fig.update_layout(
+        polar_bgcolor='rgb(9, 13, 24)',
+        polar_radialaxis_visible=True,
+        polar_radialaxis_range=[0, 5.2],
+        polar_radialaxis_showline=False,
+        polar_radialaxis_gridcolor='rgba(255, 255, 255, 0.06)',
+        polar_radialaxis_tickfont=dict(color='gray', size=9),
+        polar_angularaxis_gridcolor='rgba(255, 255, 255, 0.06)',
+        polar_angularaxis_tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
+        polar_angularaxis_rotation=90,
+        polar_angularaxis_direction="clockwise"
+    )
+    
     return fig, max_cat, min_cat, comp_names
 
 
@@ -239,7 +245,7 @@ if sheets_url:
         df_data = load_data_from_google_sheet(sheets_url)
 
 if df_data is not None:
-    # 최대 25명까지 추출하여 고정
+    # 최대 25명까지 데이터 추출 제한
     df_data = df_data.head(25)
     total_records = len(df_data)
     
@@ -252,7 +258,7 @@ if df_data is not None:
     grid_cols = st.columns(5)
     
     for idx, row in df_data.iterrows():
-        # 인덱스 연산을 통해 한 줄에 정확히 5개씩 배치
+        # 인덱스 연산을 통해 한 줄에 정확히 5개씩 그리드 배치
         col = grid_cols[idx % 5]
         
         with col:
@@ -260,7 +266,7 @@ if df_data is not None:
             name_val = row.iloc[1]
             name = str(name_val).strip() if (pd.notna(name_val) and str(name_val).strip() != "") else f"참여자 {idx+1:02d}"
             
-            # 시트에 '학교' 열이 명시되어 있을 경우 괄호 텍스트 추가
+            # 시트에 '학교' 열이 존재할 경우 괄호 텍스트 병합 추가
             school_info = ""
             if len(row) > 2 and '학교' in df_data.columns:
                 school_info = f" ({row['학교']})"
@@ -276,7 +282,7 @@ if df_data is not None:
             
             fig, max_cat, min_cat, comp_names = draw_beautiful_constellation(name, scores)
             
-            # 5x5 그리드 전용 명찰 카드 (번호 대신 실제 이름 바인딩)
+            # 5x5 그리드 전용 명찰 카드
             st.markdown(f"""
             <div class="card">
                 <div class="card-title">✨ {name}{school_info}</div>

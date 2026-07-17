@@ -304,7 +304,7 @@ if not use_demo:
         2. 표의 1열 코드가 <b>A~F</b>이고, 3열에 <b>1~5점 점수</b>가 기입된 형태를 찾아 연동합니다.<br/>
         3. 수호 메타 영역 G는 밤하늘 전 범위를 감싸도록 자동 시각화됩니다.
     </div>
-    """, unsafe_style=html=True)
+    """, unsafe_allow_html=True)
 else:
     st.sidebar.success("현재 이미지(image_55d1e8.png) 표 구조를 탑재한 시뮬레이션 데모 모드가 실행 중입니다.")
 

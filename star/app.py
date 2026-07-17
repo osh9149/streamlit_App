@@ -147,7 +147,6 @@ def load_data_from_google_sheet(sheets_url):
 # ==========================================
 
 def draw_beautiful_constellation(name, scores):
-    # 레이더 고리를 완전히 닫기 위해 마지막 인덱스에 A 추가
     categories = ['A', 'B', 'C', 'D', 'E', 'F', 'A']
     
     comp_names = {
@@ -166,63 +165,65 @@ def draw_beautiful_constellation(name, scores):
     max_cat = max(keys, key=lambda k: scores[k])
     min_cat = min(keys, key=lambda k: scores[k])
     
-    # 동점 발생 예외 처리 방어
     if scores[max_cat] == scores[min_cat]:
         max_cat = 'A'
         min_cat = 'F'
     
-    fig = go.Figure()
-    
-    # 🌌 1. G역량 메타 보호막 (배경 구체 보호막)
-    fig.add_trace(go.Scatterpolar(
-        r=[g_score]*7, 
-        theta=categories, 
-        fill='toself',
-        fillcolor='rgba(139, 92, 246, 0.05)',
-        line=dict(color='rgba(167, 139, 250, 0.3)', width=1.5, dash='dot'),
-        showlegend=False, 
-        hoverinfo='skip'
-    ))
-    
-    # ✨ 2. 핵심 별자리 궤도 드로잉 (A~F)
-    fig.add_trace(go.Scatterpolar(
-        r=r_values, 
-        theta=categories, 
-        fill='toself',
-        fillcolor='rgba(56, 189, 248, 0.18)', 
-        line=dict(color='#38BDF8', width=2.5),
-        mode='lines+markers',
-        marker=dict(
-            size=[11 if c == max_cat else 6 for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
-            color=['#FBBF24' if c == max_cat else '#38BDF8' for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
-            symbol='star'
-        ),
-        text=[f"{comp_names[c]}: {scores[c]}점" for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
-        hoverinfo='text'
-    ))
-    
-    # 🛠️ [에러 해결 해결책] 복잡한 중첩 구조 대신 개별 전용 레이아웃 API 함수를 나눠서 세팅합니다.
-    fig.update_layout(
-        showlegend=False,
-        margin=dict(l=30, r=30, t=30, b=30),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        height=320
-    )
-    
-    # polar 서브 시스템만 완벽하게 별도 단층 제어하여 데이터 충돌 차단
-    fig.update_scenes()
-    fig.update_layout(
-        polar_bgcolor='rgb(9, 13, 24)',
-        polar_radialaxis_visible=True,
-        polar_radialaxis_range=[0, 5.2],
-        polar_radialaxis_showline=False,
-        polar_radialaxis_gridcolor='rgba(255, 255, 255, 0.06)',
-        polar_radialaxis_tickfont=dict(color='gray', size=9),
-        polar_angularaxis_gridcolor='rgba(255, 255, 255, 0.06)',
-        polar_angularaxis_tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
-        polar_angularaxis_rotation=90,
-        polar_angularaxis_direction="clockwise"
+    # 🛠️ [에러 원천 방쇄] go.Figure 인자 내에 처음부터 모든 레이아웃 스펙을 빌드하여 
+    # 후속 update_layout 시 발생할 수 있는 내부 키 충돌 버그를 100% 방지합니다.
+    fig = go.Figure(
+        data=[
+            # 🌌 1. G역량 메타 보호막
+            go.Scatterpolar(
+                r=[g_score]*7, 
+                theta=categories, 
+                fill='toself',
+                fillcolor='rgba(139, 92, 246, 0.05)',
+                line=dict(color='rgba(167, 139, 250, 0.3)', width=1.5, dash='dot'),
+                showlegend=False, 
+                hoverinfo='skip'
+            ),
+            # ✨ 2. 핵심 별자리 궤도
+            go.Scatterpolar(
+                r=r_values, 
+                theta=categories, 
+                fill='toself',
+                fillcolor='rgba(56, 189, 248, 0.18)', 
+                line=dict(color='#38BDF8', width=2.5),
+                mode='lines+markers',
+                marker=dict(
+                    size=[11 if c == max_cat else 6 for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
+                    color=['#FBBF24' if c == max_cat else '#38BDF8' for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
+                    symbol='star'
+                ),
+                text=[f"{comp_names[c]}: {scores[c]}점" for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
+                hoverinfo='text'
+            )
+        ],
+        layout=go.Layout(
+            polar=dict(
+                bgcolor='rgb(9, 13, 24)',
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 5.2],
+                    showline=False,
+                    gridcolor='rgba(255, 255, 255, 0.06)',
+                    angle=90,
+                    tickfont=dict(color='gray', size=9)
+                ),
+                angularaxis=dict(
+                    gridcolor='rgba(255, 255, 255, 0.06)',
+                    tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
+                    rotation=90,
+                    direction="clockwise"
+                )
+            ),
+            showlegend=False,
+            margin=dict(l=30, r=30, t=30, b=30),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            height=320
+        )
     )
     
     return fig, max_cat, min_cat, comp_names
@@ -258,7 +259,6 @@ if df_data is not None:
     grid_cols = st.columns(5)
     
     for idx, row in df_data.iterrows():
-        # 인덱스 연산을 통해 한 줄에 정확히 5개씩 그리드 배치
         col = grid_cols[idx % 5]
         
         with col:
@@ -289,10 +289,10 @@ if df_data is not None:
             </div>
             """, unsafe_allow_html=True)
             
-            # 레이더 차트 플로팅 (화면 폭에 맞춰 유연하게 확장)
+            # 레이더 차트 플로팅
             st.plotly_chart(fig, use_container_width=True, key=f"grid_chart_{idx}", config={'displayModeBar': False})
             
-            # 리포트 요약 박스 (알파벳 번호 대신 한글 키워드 출력)
+            # 리포트 요약 박스
             st.markdown(f"""
             <div class="report-box">
                 🥇 <b style="color:#FBBF24;">강점:</b> {comp_names[max_cat]} ({scores[max_cat]}점)<br/>

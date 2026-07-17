@@ -194,19 +194,25 @@ def draw_beautiful_constellation(name, scores):
         hoverinfo='text'
     ))
     
-    # 🛠️ Plotly ValueError 해결을 위해 딕셔너리 명세를 단층 구조로 전면 단순화 및 안정화
+    # 🛠️ Plotly 규격에 맞게 계층구조(dict) 형태로 완전히 바로잡아 ValueError 근본 해결
     fig.update_layout(
-        polar_bgcolor='rgb(9, 13, 24)',
-        polar_radialaxis_visible=True,
-        polar_radialaxis_range=[0, 5.2],
-        polar_radialaxis_showline=False,
-        polar_radialaxis_gridcolor='rgba(255, 255, 255, 0.06)',
-        polar_radialaxis_angle=90,
-        polar_radialaxis_tickfont=dict(color='gray', size=9),
-        polar_angularaxis_gridcolor='rgba(255, 255, 255, 0.06)',
-        polar_angularaxis_tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
-        polar_angularaxis_rotation=90,
-        polar_angularaxis_direction="clockwise",
+        polar=dict(
+            bgcolor='rgb(9, 13, 24)',
+            radialaxis=dict(
+                visible=True,
+                range=[0, 5.2],
+                showline=False,
+                gridcolor='rgba(255, 255, 255, 0.06)',
+                angle=90,
+                tickfont=dict(color='gray', size=9)
+            ),
+            angularaxis=dict(
+                gridcolor='rgba(255, 255, 255, 0.06)',
+                tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
+                rotation=90,
+                direction="clockwise"
+            )
+        ),
         showlegend=False,
         margin=dict(l=30, r=30, t=30, b=30),
         paper_bgcolor='rgba(0,0,0,0)',

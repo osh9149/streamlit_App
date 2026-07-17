@@ -228,7 +228,7 @@ if df_data is not None:
         with col:
             # 💡 구글 시트 구조에 맞게 인덱스 매핑 수정 (0: 번호, 1: 이름)
             name_val = row.iloc[1] if use_demo is False else row["이름"]
-            name = str(name_val).strip() if (pd.notna(name_val) and str(name_val).strip() != "") else f"참여자 {idx+1:02d}"
+            name = str(name_val).strip() if (pd.notna(name_val) and str(name_val).strip() != "") else f"교사 {idx+1:02d}"
             
             # (선택 사항) 학교 정보가 시트에 존재할 경우 패스 처리
             school_info = ""

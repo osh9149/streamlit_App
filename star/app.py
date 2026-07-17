@@ -6,14 +6,14 @@ import re
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-# 페이지 기본 설정 (화면을 최대한 넓게 쓰기 위해 와이드 모드 적용)
+# 페이지 기본 설정
 st.set_page_config(
     page_title="My Constellation - 5x5 역량 별자리 관측소",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# 화면 전체 너비를 100% 활용하고 여백을 없애는 프리미엄 우주 테마 CSS
+# 밤하늘 테마 CSS 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap');
@@ -21,58 +21,36 @@ st.markdown("""
     html, body, [data-testid="stSidebar"] {
         font-family: 'Noto Sans KR', sans-serif;
     }
-    /* Streamlit 기본 여백 강제 제거 및 화면 전체 사용 */
-    .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 1rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        max-width: 100% !important;
-    }
     .stApp {
         background: #060913; 
     }
     h1, h2, h3 {
         color: #ECF0F1 !important;
     }
-    /* 컨트롤러 박스 스타일 */
-    .control-panel {
-        background: rgba(30, 41, 59, 0.4);
-        border: 1px solid rgba(99, 102, 241, 0.3);
-        border-radius: 12px;
-        padding: 15px 20px;
-        margin-bottom: 25px;
-    }
-    /* 별자리 카드 스타일 */
     .card {
         background: rgba(15, 23, 42, 0.7);
         border: 1px solid rgba(99, 102, 241, 0.25);
         border-radius: 12px;
         padding: 10px 15px;
-        margin-top: 5px;
+        margin-top: 10px;
         margin-bottom: 0px;
         text-align: center;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
     }
     .card-title {
-        font-size: 1rem;
+        font-size: 0.95rem;
         font-weight: 700;
         color: #F8FAFC;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
-    /* 하단 분석 스크립트 박스 */
     .report-box {
         background: rgba(30, 41, 59, 0.3); 
-        padding: 8px 10px; 
+        padding: 8px; 
         border-radius: 8px; 
         border: 1px dashed rgba(255,255,255,0.06); 
-        margin-bottom: 15px; 
-        font-size: 12px; 
+        margin-bottom: 20px; 
+        font-size: 11px; 
         color: #E2E8F0;
         line-height: 1.5;
-        text-align: left;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -89,7 +67,7 @@ def extract_sheets_id(url):
 def load_data_from_google_sheet(sheets_url):
     sheets_id = extract_sheets_id(sheets_url)
     if not sheets_id:
-        st.error("올바르지 않은 구글 시트 링크 주소입니다.")
+        st.sidebar.error("올바르지 않은 구글 시트 링크 주소입니다.")
         return None
         
     try:
@@ -100,7 +78,7 @@ def load_data_from_google_sheet(sheets_url):
         spreadsheet = service.spreadsheets().get(spreadsheetId=sheets_id).execute()
         sheets = spreadsheet.get('sheets', [])
         if not sheets:
-            st.error("구글 시트 내에 탭을 찾을 수 없습니다.")
+            st.sidebar.error("구글 시트 내에 탭을 찾을 수 없습니다.")
             return None
         first_sheet_name = sheets[0]['properties']['title']
         
@@ -111,12 +89,12 @@ def load_data_from_google_sheet(sheets_url):
         
         values = result.get('values', [])
         if not values or len(values) < 2:
-            st.warning("시트에 읽어올 데이터 행이 부족합니다.")
+            st.sidebar.warning("시트에 읽어올 데이터 행이 부족합니다.")
             return None
             
         max_cols = max(len(row) for row in values)
         if max_cols < 8:
-            st.error(f"시트의 열 개수가 부족합니다. (최소 8개 열 필요)")
+            st.sidebar.error(f"시트의 열 개수가 부족합니다. (최소 8개 열 필요)")
             return None
 
         sanitized_values = []
@@ -138,12 +116,12 @@ def load_data_from_google_sheet(sheets_url):
         
         return df
     except Exception as e:
-        st.error(f"구글 시트 연동 실패 원인: {e}")
+        st.sidebar.error(f"구글 시트 연동 실패 원인: {e}")
         return None
 
 
 # ==========================================
-# 2. 풀 스크린 5x5 그리드용 별자리 시각화 엔진 (ValueError 완벽 방어)
+# 2. 5x5 그리드용 별자리 시각화 엔진
 # ==========================================
 
 def draw_beautiful_constellation(name, scores):
@@ -154,25 +132,19 @@ def draw_beautiful_constellation(name, scores):
         'B': '윤리적 실천', 
         'C': '수업·학습자 분석',
         'D': '설계', 
-        'E': '실행', 
+        'E': '実行', 
         'F': '평가'
     }
     
     r_values = [scores[cat] for cat in ['A', 'B', 'C', 'D', 'E', 'F', 'A']]
     g_score = 5.0  
     
-    keys = ['A', 'B', 'C', 'D', 'E', 'F']
-    max_cat = max(keys, key=lambda k: scores[k])
-    min_cat = min(keys, key=lambda k: scores[k])
-    
-    # 동점 방어 안전 처리
-    if scores[max_cat] == scores[min_cat]:
-        max_cat = 'A'
-        min_cat = 'F'
+    max_cat = max(['A', 'B', 'C', 'D', 'E', 'F'], key=lambda k: scores[k])
+    min_cat = min(['A', 'B', 'C', 'D', 'E', 'F'], key=lambda k: scores[k])
     
     fig = go.Figure()
     
-    # G역량 메타 보호막 (배경 구체 보호막)
+    # G역량 메타 보호막
     fig.add_trace(go.Scatterpolar(
         r=[g_score]*7, theta=categories, fill='toself',
         fillcolor='rgba(139, 92, 246, 0.05)',
@@ -180,13 +152,13 @@ def draw_beautiful_constellation(name, scores):
         showlegend=False, hoverinfo='skip'
     ))
     
-    # 핵심 별자리 드로잉
+    # 핵심 별자리
     fig.add_trace(go.Scatterpolar(
         r=r_values, theta=categories, fill='toself',
-        fillcolor='rgba(56, 189, 248, 0.18)', line=dict(color='#38BDF8', width=2.5),
+        fillcolor='rgba(56, 189, 248, 0.18)', line=dict(color='#38BDF8', width=2),
         mode='lines+markers',
         marker=dict(
-            size=[11 if c == max_cat else 6 for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
+            size=[10 if c == max_cat else 5 for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
             color=['#FBBF24' if c == max_cat else '#38BDF8' for c in ['A', 'B', 'C', 'D', 'E', 'F', 'A']],
             symbol='star'
         ),
@@ -194,95 +166,97 @@ def draw_beautiful_constellation(name, scores):
         hoverinfo='text'
     ))
     
-    # 🛠️ 최신 Plotly 스펙에 완벽히 부합하도록 dict 중첩 정식 API 구조로 일괄 수정
     fig.update_layout(
         polar=dict(
             bgcolor='rgb(9, 13, 24)',
-            radialaxis=dict(
-                visible=True,
-                range=[0, 5.2],
-                showline=False,
-                gridcolor='rgba(255, 255, 255, 0.06)',
-                angle=90,
-                tickfont=dict(color='gray', size=9)
-            ),
-            angularaxis=dict(
-                gridcolor='rgba(255, 255, 255, 0.06)',
-                tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
-                rotation=90,
-                direction="clockwise"
-            )
+            radialaxis=dict(visible=True, range=[0, 5.2], showline=False, gridcolor='rgba(255,255,255,0.06)', angle=90, tickfont=dict(color='gray', size=8)),
+            angularaxis=dict(gridcolor='rgba(255,255,255,0.06)', tickfont=dict(color='#ECF0F1', size=9), rotation=90, direction="clockwise")
         ),
-        showlegend=False,
-        margin=dict(l=30, r=30, t=30, b=30),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        height=320
+        showlegend=False, margin=dict(l=25, r=25, t=25, b=25),
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=260
     )
     return fig, max_cat, min_cat, comp_names
 
 
 # ==========================================
-# 3. 상단 대시보드 및 5x5 그리드 구현
+# 3. Streamlit 대시보드 렌더링
 # ==========================================
 
-st.title("🌌 25인 디지털 교육 역량 별자리 은하 지도 [5 × 5 Full-Screen]")
+st.title("🌌 25인 자가진단 역량 별자리 [5 × 5 한눈에 보기]")
+st.markdown("구글 스프레드시트의 데이터를 실시간 매핑하여 밤하늘의 고유 성좌 지도를 구성합니다.")
 
-# 상단 고정식 스프레드시트 링크 입력창 패널
-st.markdown('<div class="control-panel">', unsafe_allow_html=True)
-sheets_url = st.text_input("📂 연동할 구글 스프레드시트 링크 입력", value="https://docs.google.com/spreadsheets/d/1oITSnXoXMDP8Dbs_L5ZLvwRbhYB6qm2fruyjES3jDfM/edit?usp=sharing")
-st.markdown('</div>', unsafe_allow_html=True)
+st.sidebar.header("🛸 별 관측 제어판")
+use_demo = st.sidebar.checkbox("🎁 25인 가상 데모 시뮬레이션", value=True)
 
-# 데이터 실시간 동기화 호출
+sheets_url = ""
 df_data = None
-if sheets_url:
-    with st.spinner("🌌 성간 데이터 센터와 실시간 동기화 중..."):
-        df_data = load_data_from_google_sheet(sheets_url)
 
-# 데이터 파싱이 정상적으로 이루어지면 아래 레이아웃 전개
+if not use_demo:
+    sheets_url = st.sidebar.text_input("📂 구글 스프레드시트 링크 입력", value="https://docs.google.com/spreadsheets/d/1oITSnXoXMDP8Dbs_L5ZLvwRbhYB6qm2fruyjES3jDfM/edit?usp=sharing")
+    if sheets_url:
+        with st.spinner("구글 데이터 허브 동기화 중..."):
+            df_data = load_data_from_google_sheet(sheets_url)
+    else:
+        st.warning("👈 왼쪽 제어판에 구글 스프레드시트 주소를 붙여넣어 주세요.")
+else:
+    st.sidebar.success("현재 데모 데이터가 작동 중입니다.")
+    demo_rows = []
+    for i in range(1, 26):
+        demo_rows.append({
+            "이름": f"교사 {i:02d}", "학교": "선도학교",
+            "A_score": np.round(np.random.uniform(2.0, 5.0), 1), "B_score": np.round(np.random.uniform(2.0, 5.0), 1),
+            "C_score": np.round(np.random.uniform(2.0, 5.0), 1), "D_score": np.round(np.random.uniform(2.0, 5.0), 1),
+            "E_score": np.round(np.random.uniform(2.0, 5.0), 1), "F_score": np.round(np.random.uniform(2.0, 5.0), 1)
+        })
+    df_data = pd.DataFrame(demo_rows)
+
 if df_data is not None:
-    # 25명 규격 맞춤 컷팅
     df_data = df_data.head(25)
+    total_records = len(df_data)
     
-    with st.expander("📂 원본 데이터베이스 테이블 확인"):
+    st.success(f"📊 {total_records}명의 데이터 궤도가 정밀 동기화되었습니다.")
+    
+    with st.expander("📂 로드된 데이터프레임 검증 테이블"):
         st.dataframe(df_data, use_container_width=True)
-        
-    # 화면 전체를 채우는 5열(Columns) 확장 레이아웃
+    
+    # 5열 그리드 구성
     grid_cols = st.columns(5)
     
     for idx, row in df_data.iterrows():
-        # 바둑판 5개 배치를 위한 분기 연산
         col = grid_cols[idx % 5]
         
         with col:
-            # B열(인덱스 1)의 실제 이름을 식별자로 추적하여 타이틀 바인딩
-            name_val = row.iloc[1]
+            # 💡 구글 시트 구조에 맞게 인덱스 매핑 수정 (0: 번호, 1: 이름)
+            name_val = row.iloc[1] if use_demo is False else row["이름"]
             name = str(name_val).strip() if (pd.notna(name_val) and str(name_val).strip() != "") else f"참여자 {idx+1:02d}"
             
-            # '학교' 열이 시트에 컬럼명으로 존재할 경우 이름을 괄호 형태로 바인딩
+            # (선택 사항) 학교 정보가 시트에 존재할 경우 패스 처리
             school_info = ""
-            if len(row) > 2 and '학교' in df_data.columns:
-                school_info = f" ({row['학교']})"
+            if not use_demo and len(row) > 2:
+                # 시트 헤더 이름을 추적하여 '학교' 열이 있으면 가져옵니다.
+                if '학교' in df_data.columns:
+                    school_info = f" ({row['학교']})"
             
-            # 각 행 인덱스로부터 데이터 딕셔너리 정렬
             scores = {
-                'A': float(row['A_score']), 'B': float(row['B_score']), 'C': float(row['C_score']),
-                'D': float(row['D_score']), 'E': float(row['E_score']), 'F': float(row['F_score'])
+                'A': float(row['A_score']),
+                'B': float(row['B_score']),
+                'C': float(row['C_score']),
+                'D': float(row['D_score']),
+                'E': float(row['E_score']),
+                'F': float(row['F_score'])
             }
             
             fig, max_cat, min_cat, comp_names = draw_beautiful_constellation(name, scores)
             
-            # 5x5 그리드 전용 명찰 카드
+            # 카드 타이틀 바에 번호 대신 온전한 이름 바인딩
             st.markdown(f"""
             <div class="card">
                 <div class="card-title">✨ {name}{school_info}</div>
             </div>
             """, unsafe_allow_html=True)
             
-            # 레이더 차트 플로팅
             st.plotly_chart(fig, use_container_width=True, key=f"grid_chart_{idx}", config={'displayModeBar': False})
             
-            # 리포트 요약 박스
             st.markdown(f"""
             <div class="report-box">
                 🥇 <b style="color:#FBBF24;">강점:</b> {comp_names[max_cat]} ({scores[max_cat]}점)<br/>

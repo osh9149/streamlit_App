@@ -106,6 +106,7 @@ def load_data_from_google_sheet(sheets_url):
         headers = [h.strip() for h in sanitized_values[0]]
         df = pd.DataFrame(sanitized_values[1:], columns=headers)
         
+        # C열(인덱스 2)부터 H열(인덱스 7)까지 점수 형변환
         df['A_score'] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(1.0)
         df['B_score'] = pd.to_numeric(df.iloc[:, 3], errors='coerce').fillna(1.0)
         df['C_score'] = pd.to_numeric(df.iloc[:, 4], errors='coerce').fillna(1.0)
@@ -126,13 +127,12 @@ def load_data_from_google_sheet(sheets_url):
 def draw_beautiful_constellation(name, scores):
     categories = ['A', 'B', 'C', 'D', 'E', 'F', 'A']
     
-    # 💡 번호 대신 매핑되어 표출될 실제 역량 이름들
     comp_names = {
         'A': '교육 이해', 
         'B': '윤리적 실천', 
         'C': '수업·학습자 분석',
         'D': '설계', 
-        'E': '실행', 
+        'E': '実行', 
         'F': '평가'
     }
     
@@ -203,7 +203,7 @@ else:
     demo_rows = []
     for i in range(1, 26):
         demo_rows.append({
-            "이름": f"참여자 {i:02d}", "학교": "선도학교",
+            "이름": f"교사 {i:02d}", "학교": "선도학교",
             "A_score": np.round(np.random.uniform(2.0, 5.0), 1), "B_score": np.round(np.random.uniform(2.0, 5.0), 1),
             "C_score": np.round(np.random.uniform(2.0, 5.0), 1), "D_score": np.round(np.random.uniform(2.0, 5.0), 1),
             "E_score": np.round(np.random.uniform(2.0, 5.0), 1), "F_score": np.round(np.random.uniform(2.0, 5.0), 1)
@@ -226,8 +226,16 @@ if df_data is not None:
         col = grid_cols[idx % 5]
         
         with col:
-            name_val = row.iloc[0]
+            # 💡 구글 시트 구조에 맞게 인덱스 매핑 수정 (0: 번호, 1: 이름)
+            name_val = row.iloc[1] if use_demo is False else row["이름"]
             name = str(name_val).strip() if (pd.notna(name_val) and str(name_val).strip() != "") else f"참여자 {idx+1:02d}"
+            
+            # (선택 사항) 학교 정보가 시트에 존재할 경우 패스 처리
+            school_info = ""
+            if not use_demo and len(row) > 2:
+                # 시트 헤더 이름을 추적하여 '학교' 열이 있으면 가져옵니다.
+                if '학교' in df_data.columns:
+                    school_info = f" ({row['학교']})"
             
             scores = {
                 'A': float(row['A_score']),
@@ -240,15 +248,15 @@ if df_data is not None:
             
             fig, max_cat, min_cat, comp_names = draw_beautiful_constellation(name, scores)
             
+            # 카드 타이틀 바에 번호 대신 온전한 이름 바인딩
             st.markdown(f"""
             <div class="card">
-                <div class="card-title">✨ {name}</div>
+                <div class="card-title">✨ {name}{school_info}</div>
             </div>
             """, unsafe_allow_html=True)
             
             st.plotly_chart(fig, use_container_width=True, key=f"grid_chart_{idx}", config={'displayModeBar': False})
             
-            # 💡 하단 리포트 박스에서 알파벳 코드 대신 한글 역량명이 매핑되어 출력되도록 수정 완료!
             st.markdown(f"""
             <div class="report-box">
                 🥇 <b style="color:#FBBF24;">강점:</b> {comp_names[max_cat]} ({scores[max_cat]}점)<br/>

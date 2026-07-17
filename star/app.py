@@ -143,7 +143,7 @@ def load_data_from_google_sheet(sheets_url):
 
 
 # ==========================================
-# 2. 풀 스크린 5x5 그리드용 별자리 시각화 엔진 (안전성 강화)
+# 2. 풀 스크린 5x5 그리드용 별자리 시각화 엔진 (안전성 강화 버전)
 # ==========================================
 
 def draw_beautiful_constellation(name, scores):
@@ -194,25 +194,21 @@ def draw_beautiful_constellation(name, scores):
         hoverinfo='text'
     ))
     
-    # 🛠️ Plotly 규격에 맞게 계층구조(dict) 형태로 완전히 바로잡아 ValueError 근본 해결
+    # 🛠️ ValueError 해결을 위해 복잡한 구조를 단층 함수 API 호출 방식으로 전면 이관
+    fig.update_polars(
+        bgcolor='rgb(9, 13, 24)',
+        radialaxis_visible=True,
+        radialaxis_range=[0, 5.2],
+        radialaxis_showline=False,
+        radialaxis_gridcolor='rgba(255, 255, 255, 0.06)',
+        radialaxis_tickfont=dict(color='gray', size=9),
+        angularaxis_gridcolor='rgba(255, 255, 255, 0.06)',
+        angularaxis_tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
+        angularaxis_rotation=90,
+        angularaxis_direction="clockwise"
+    )
+    
     fig.update_layout(
-        polar=dict(
-            bgcolor='rgb(9, 13, 24)',
-            radialaxis=dict(
-                visible=True,
-                range=[0, 5.2],
-                showline=False,
-                gridcolor='rgba(255, 255, 255, 0.06)',
-                angle=90,
-                tickfont=dict(color='gray', size=9)
-            ),
-            angularaxis=dict(
-                gridcolor='rgba(255, 255, 255, 0.06)',
-                tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
-                rotation=90,
-                direction="clockwise"
-            )
-        ),
         showlegend=False,
         margin=dict(l=30, r=30, t=30, b=30),
         paper_bgcolor='rgba(0,0,0,0)',

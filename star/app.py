@@ -61,7 +61,7 @@ st.markdown("""
         font-size: 12px;
     }
 </style>
-""", unsafe_style=html=True)
+""", unsafe_allow_html=True)
 
 
 # ==========================================

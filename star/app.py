@@ -128,6 +128,7 @@ def load_data_from_google_sheet(sheets_url):
         headers = [h.strip() for h in sanitized_values[0]]
         df = pd.DataFrame(sanitized_values[1:], columns=headers)
         
+        # C열(인덱스 2)부터 H열(인덱스 7)까지 점수 형변환
         df['A_score'] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(1.0)
         df['B_score'] = pd.to_numeric(df.iloc[:, 3], errors='coerce').fillna(1.0)
         df['C_score'] = pd.to_numeric(df.iloc[:, 4], errors='coerce').fillna(1.0)
@@ -153,26 +154,25 @@ def draw_beautiful_constellation(name, scores):
         'B': '윤리적 실천', 
         'C': '수업·학습자 분석',
         'D': '설계', 
-        'E': '실행', # 💡 타이포 수정 완료
+        'E': '실행', 
         'F': '평가'
     }
     
     r_values = [scores[cat] for cat in ['A', 'B', 'C', 'D', 'E', 'F', 'A']]
     g_score = 5.0  
     
-    # 💡 모든 점수가 동일할 때 인덱스 에러가 나는 현상을 완벽하게 방어하는 로직 적용
     keys = ['A', 'B', 'C', 'D', 'E', 'F']
     max_cat = max(keys, key=lambda k: scores[k])
     min_cat = min(keys, key=lambda k: scores[k])
     
-    # 만약 모든 점수가 완벽히 같다면 첫 번째 요소와 마지막 요소를 기본 강점/보완점으로 처리
+    # 동점 방어 안전 코딩
     if scores[max_cat] == scores[min_cat]:
         max_cat = 'A'
         min_cat = 'F'
     
     fig = go.Figure()
     
-    # G역량 메타 보호막
+    # G역량 메타 보호막 (배경 구체 보호막)
     fig.add_trace(go.Scatterpolar(
         r=[g_score]*7, theta=categories, fill='toself',
         fillcolor='rgba(139, 92, 246, 0.05)',
@@ -180,7 +180,7 @@ def draw_beautiful_constellation(name, scores):
         showlegend=False, hoverinfo='skip'
     ))
     
-    # 핵심 별자리
+    # 핵심 별자리 드로잉
     fig.add_trace(go.Scatterpolar(
         r=r_values, theta=categories, fill='toself',
         fillcolor='rgba(56, 189, 248, 0.18)', line=dict(color='#38BDF8', width=2.5),
@@ -194,7 +194,6 @@ def draw_beautiful_constellation(name, scores):
         hoverinfo='text'
     ))
     
-    # Plotly 레이아웃을 정교한 딕셔너리 구조로 갱신하여 ValueError의 근본을 해결함
     fig.update_layout(
         polar=dict(
             bgcolor='rgb(9, 13, 24)',
@@ -213,60 +212,43 @@ def draw_beautiful_constellation(name, scores):
 
 st.title("🌌 25인 디지털 교육 역량 별자리 은하 지도 [5 × 5 Full-Screen]")
 
-# 화면 상단에 정렬되는 제어 대시보드 패널 생성
+# 🛠️ 상단 고정식 스프레드시트 링크 입력창 패널
 st.markdown('<div class="control-panel">', unsafe_allow_html=True)
-top_col1, top_col2 = st.columns([1, 3])
-
-with top_col1:
-    use_demo = st.checkbox("🎁 25인 가상 데모 시뮬레이션 작동", value=True)
-
-with top_col2:
-    if not use_demo:
-        sheets_url = st.text_input("📂 연동할 구글 스프레드시트 링크 입력", value="https://docs.google.com/spreadsheets/d/1oITSnXoXMDP8Dbs_L5ZLvwRbhYB6qm2fruyjES3jDfM/edit?usp=sharing")
-    else:
-        st.markdown("<p style='color:#A78BFA; padding-top:8px; margin:0; font-size:14px;'>현재 시뮬레이션 은하계가 가동 중입니다. 실무 데이터 연동 시 왼쪽 체크박스를 꺼주세요.</p>", unsafe_allow_html=True)
+sheets_url = st.text_input("📂 연동할 구글 스프레드시트 링크 입력", value="https://docs.google.com/spreadsheets/d/1oITSnXoXMDP8Dbs_L5ZLvwRbhYB6qm2fruyjES3jDfM/edit?usp=sharing")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 데이터 로드 프로세스
+# 데이터 실시간 동기화 호출
 df_data = None
-if not use_demo:
-    if sheets_url:
-        with st.spinner("🌌 성간 데이터 센터와 실시간 동기화 중..."):
-            df_data = load_data_from_google_sheet(sheets_url)
-    else:
-        st.warning("👈 위쪽 제어판에 구글 스프레드시트 주소를 붙여넣어 주세요.")
-else:
-    demo_rows = []
-    for i in range(1, 26):
-        demo_rows.append({
-            "이름": f"참여자 {i:02d}", "학교": "선도학교",
-            "A_score": np.round(np.random.uniform(2.0, 5.0), 1), "B_score": np.round(np.random.uniform(2.0, 5.0), 1),
-            "C_score": np.round(np.random.uniform(2.0, 5.0), 1), "D_score": np.round(np.random.uniform(2.0, 5.0), 1),
-            "E_score": np.round(np.random.uniform(2.0, 5.0), 1), "F_score": np.round(np.random.uniform(2.0, 5.0), 1)
-        })
-    df_data = pd.DataFrame(demo_rows)
+if sheets_url:
+    with st.spinner("🌌 성간 데이터 센터와 실시간 동기화 중..."):
+        df_data = load_data_from_google_sheet(sheets_url)
 
-# 시각화 화면 렌더링
+# 데이터 파싱이 정상적으로 이루어지면 아래 레이아웃 전개
 if df_data is not None:
+    # 25명 규격 맞춤 컷팅
     df_data = df_data.head(25)
     
     with st.expander("📂 원본 데이터베이스 테이블 확인"):
         st.dataframe(df_data, use_container_width=True)
         
-    # 화면 전체를 꽉 채우는 완전한 5열(Columns) 스크린 전개
+    # 화면 전체를 채우는 5열(Columns) 확장 레이아웃
     grid_cols = st.columns(5)
     
     for idx, row in df_data.iterrows():
+        # 바둑판 5개 배치를 위한 분기 연산
         col = grid_cols[idx % 5]
         
         with col:
-            name_val = row.iloc[1] if use_demo is False else row["이름"]
+            # B열(인덱스 1)의 실제 이름을 식별자로 추적하여 타이틀 바인딩
+            name_val = row.iloc[1]
             name = str(name_val).strip() if (pd.notna(name_val) and str(name_val).strip() != "") else f"참여자 {idx+1:02d}"
             
+            # '학교' 열이 시트에 컬럼명으로 존재할 경우 이름을 괄호 형태로 바인딩
             school_info = ""
-            if not use_demo and len(row) > 2 and '학교' in df_data.columns:
+            if len(row) > 2 and '학교' in df_data.columns:
                 school_info = f" ({row['학교']})"
             
+            # 각 행 인덱스로부터 데이터 딕셔너리 정렬
             scores = {
                 'A': float(row['A_score']), 'B': float(row['B_score']), 'C': float(row['C_score']),
                 'D': float(row['D_score']), 'E': float(row['E_score']), 'F': float(row['F_score'])
@@ -274,7 +256,7 @@ if df_data is not None:
             
             fig, max_cat, min_cat, comp_names = draw_beautiful_constellation(name, scores)
             
-            # 카드 타이틀 바
+            # 5x5 그리드 전용 명찰 카드
             st.markdown(f"""
             <div class="card">
                 <div class="card-title">✨ {name}{school_info}</div>

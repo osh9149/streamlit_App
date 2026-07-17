@@ -8,7 +8,7 @@ from googleapiclient.discovery import build
 
 # 페이지 기본 설정 (화면을 최대한 넓게 쓰기 위해 와이드 모드 적용 및 사이드바 제거)
 st.set_page_config(
-    page_title="My Constellation - 5x5 역량 별자리 관측소",
+    page_title="디지털 교육 역량 자가 진단 별자리",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -232,7 +232,7 @@ def draw_beautiful_constellation(name, scores):
 # 3. 상단 대시보드 및 풀 스크린 5x5 그리드 구현
 # ==========================================
 
-st.title("🌌 25인 디지털 교육 역량 별자리 은하 지도 [5 × 5 Full-Screen]")
+st.title("🌌 디지털 교육 역량 자가 진단 별자리")
 
 # 대시보드 상단 제어 패널 배치
 st.markdown('<div class="control-panel">', unsafe_allow_html=True)

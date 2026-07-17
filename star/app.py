@@ -143,7 +143,7 @@ def load_data_from_google_sheet(sheets_url):
 
 
 # ==========================================
-# 2. 풀 스크린 5x5 그리드용 별자리 시각화 엔진
+# 2. 풀 스크린 5x5 그리드용 별자리 시각화 엔진 (안전성 강화)
 # ==========================================
 
 def draw_beautiful_constellation(name, scores):
@@ -165,7 +165,7 @@ def draw_beautiful_constellation(name, scores):
     max_cat = max(keys, key=lambda k: scores[k])
     min_cat = min(keys, key=lambda k: scores[k])
     
-    # 동점 방어 안전 코딩
+    # 동점 방어 안전 처리
     if scores[max_cat] == scores[min_cat]:
         max_cat = 'A'
         min_cat = 'F'
@@ -194,14 +194,24 @@ def draw_beautiful_constellation(name, scores):
         hoverinfo='text'
     ))
     
+    # 🛠️ Plotly ValueError 해결을 위해 딕셔너리 명세를 단층 구조로 전면 단순화 및 안정화
     fig.update_layout(
-        polar=dict(
-            bgcolor='rgb(9, 13, 24)',
-            radialaxis=dict(visible=True, range=[0, 5.2], showline=False, gridcolor='rgba(255,255,255,0.06)', angle=90, tickfont=dict(color='gray', size=9)),
-            angularaxis=dict(gridcolor='rgba(255,255,255,0.06)', tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'), rotation=90, direction="clockwise")
-        ),
-        showlegend=False, margin=dict(l=30, r=30, t=30, b=30),
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=320
+        polar_bgcolor='rgb(9, 13, 24)',
+        polar_radialaxis_visible=True,
+        polar_radialaxis_range=[0, 5.2],
+        polar_radialaxis_showline=False,
+        polar_radialaxis_gridcolor='rgba(255, 255, 255, 0.06)',
+        polar_radialaxis_angle=90,
+        polar_radialaxis_tickfont=dict(color='gray', size=9),
+        polar_angularaxis_gridcolor='rgba(255, 255, 255, 0.06)',
+        polar_angularaxis_tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
+        polar_angularaxis_rotation=90,
+        polar_angularaxis_direction="clockwise",
+        showlegend=False,
+        margin=dict(l=30, r=30, t=30, b=30),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        height=320
     )
     return fig, max_cat, min_cat, comp_names
 
@@ -212,7 +222,7 @@ def draw_beautiful_constellation(name, scores):
 
 st.title("🌌 25인 디지털 교육 역량 별자리 은하 지도 [5 × 5 Full-Screen]")
 
-# 🛠️ 상단 고정식 스프레드시트 링크 입력창 패널
+# 상단 고정식 스프레드시트 링크 입력창 패널
 st.markdown('<div class="control-panel">', unsafe_allow_html=True)
 sheets_url = st.text_input("📂 연동할 구글 스프레드시트 링크 입력", value="https://docs.google.com/spreadsheets/d/1oITSnXoXMDP8Dbs_L5ZLvwRbhYB6qm2fruyjES3jDfM/edit?usp=sharing")
 st.markdown('</div>', unsafe_allow_html=True)

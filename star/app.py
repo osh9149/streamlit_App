@@ -169,8 +169,7 @@ def draw_beautiful_constellation(name, scores):
         max_cat = 'A'
         min_cat = 'F'
     
-    # 🛠️ [에러 원천 방쇄] go.Figure 인자 내에 처음부터 모든 레이아웃 스펙을 빌드하여 
-    # 후속 update_layout 시 발생할 수 있는 내부 키 충돌 버그를 100% 방지합니다.
+    # 🛠️ Layout 속성 내의 가짜 인자(fontweight 등)를 완전히 제거하고 Plotly 정식 속성으로 재구성
     fig = go.Figure(
         data=[
             # 🌌 1. G역량 메타 보호막
@@ -213,7 +212,7 @@ def draw_beautiful_constellation(name, scores):
                 ),
                 angularaxis=dict(
                     gridcolor='rgba(255, 255, 255, 0.06)',
-                    tickfont=dict(color='#ECF0F1', size=11, fontweight='bold'),
+                    tickfont=dict(color='#ECF0F1', size=11), # 에러 유발 인자(fontweight='bold') 완벽 제거
                     rotation=90,
                     direction="clockwise"
                 )

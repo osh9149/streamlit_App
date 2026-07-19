@@ -257,6 +257,7 @@ def aggregate_time(df: pd.DataFrame, granularity: str) -> pd.DataFrame:
 
 def find_korean_font() -> str | None:
     candidates = [
+        "https://github.com/osh9149/streamlit_App/blob/main/youtube/NanumGothic.ttf",
         "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
         "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",

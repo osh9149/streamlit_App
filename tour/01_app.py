@@ -1,183 +1,653 @@
-import streamlit as st
+import html
 import random
-import time
+import re
+from urllib.parse import unquote
 
-# --- 페이지 설정 ---
+import pandas as pd
+import requests
+import streamlit as st
+
+
+# =========================================================
+# 기본 설정
+# =========================================================
 st.set_page_config(
-    page_title="🎁 랜덤 국내여행 뽑기",
-    page_icon="✈️",
-    layout="centered"
+    page_title="랜덤 국내여행 뽑기",
+    page_icon="🎁",
+    layout="wide",
 )
 
-# --- 국내 여행지 데이터베이스 ---
-TRAVEL_DATA = [
-    {
-        "name": "강릉",
-        "region": "강원",
-        "theme": "해변/힐링",
-        "spots": ["안목해변 커피거리", "경포호수", "하슬라아트월드"],
-        "food": ["초당순두부", "장칼국수", "강릉 샌드"],
-        "desc": "푸른 동해바다와 향긋한 커피 향이 가득한 힐링 도시!"
-    },
-    {
-        "name": "속초",
-        "region": "강원",
-        "theme": "자연/식도락",
-        "spots": ["설악산 국립공원", "속초관광수산시장", "외옹치 바다향기로"],
-        "food": ["속초 닭강정", "오징어순대", "아바이순대"],
-        "desc": "산과 바다, 그리고 먹거리가 완벽한 삼박자를 이루는 곳!"
-    },
-    {
-        "name": "경주",
-        "region": "경상",
-        "theme": "역사/문화",
-        "spots": ["황리단길", "동궁과 월지", "첨성대"],
-        "food": ["십원빵", "경주 쌈밥", "황남빵"],
-        "desc": "낮에는 고즈넉한 사적지, 밤에는 야경이 아름다운 감성 도시!"
-    },
-    {
-        "name": "여수",
-        "region": "전라",
-        "theme": "해변/야경",
-        "spots": ["돌산대교 야경", "오동도", "향일암"],
-        "food": ["돌산갓김치", "여수 삼합", "게장백반"],
-        "desc": "여수 밤바다 노래가 절로 나오는 감성 넘치는 항구 도시!"
-    },
-    {
-        "name": "전주",
-        "region": "전라",
-        "theme": "식도락/문화",
-        "spots": ["전주 한옥마을", "경기전", "덕진공원"],
-        "food": ["전주 비빔밥", "콩나물국밥", "초코파이"],
-        "desc": "한복 입고 거니는 한옥마을과 입이 즐거운 미식의 수도!"
-    },
-    {
-        "name": "제주 서귀포",
-        "region": "제주",
-        "theme": "자연/힐링",
-        "spots": ["성산일출봉", "쇠소깍", "천지연폭포"],
-        "food": ["흑돼지 구이", "고기국수", "한라봉 디저트"],
-        "desc": "에메랄드빛 바다와 천혜의 자연이 반겨주는 대표 휴양지!"
-    },
-    {
-        "name": "단양",
-        "region": "충청",
-        "theme": "액티비티/자연",
-        "spots": ["만천하스카이워크", "도담삼봉", "패러글라이딩 정상"],
-        "food": ["마늘 떡갈비", "쏘가리 매운탕", "마늘 순대"],
-        "desc": "짜릿한 액티비티와 남한강의 비경을 둘 다 즐기는 곳!"
-    },
-    {
-        "name": "남해",
-        "region": "경상",
-        "theme": "해변/힐링",
-        "spots": ["독일마을", "보리암", "다랭이마을"],
-        "food": ["멸치쌈밥", "유자 에이드", "독일식 수제맥주"],
-        "desc": "이국적인 풍경과 드넓은 바다가 선사하는 느긋한 휴식!"
-    },
-    {
-        "name": "포항",
-        "region": "경상",
-        "theme": "해변/사진",
-        "spots": ["호미곶 해맞이광장", "환호공원 스페이스워크", "영일대 해수욕장"],
-        "food": ["포항 물회", "구룡포 과메기", "대게"],
-        "desc": "바다 위를 걷는 스페이스워크와 시원한 물회가 기다리는 곳!"
-    },
-    {
-        "name": "안동",
-        "region": "경상",
-        "theme": "역사/식도락",
-        "spots": ["하회마을", "월영교", "병산서원"],
-        "food": ["안동찜닭", "간고등어구이", "안동소주"],
-        "desc": "전통의 숨결이 느껴지는 마을과 고소한 찜닭이 맞이하는 곳!"
+API_BASE_URL = "https://apis.data.go.kr/B551011/KorService2"
+MOBILE_OS = "ETC"
+MOBILE_APP = "RandomKoreaTrip"
+
+# 한국관광공사 TourAPI 지역 코드
+AREA_CODES = {
+    "전국": "",
+    "서울": "1",
+    "인천": "2",
+    "대전": "3",
+    "대구": "4",
+    "광주": "5",
+    "부산": "6",
+    "울산": "7",
+    "세종": "8",
+    "경기": "31",
+    "강원": "32",
+    "충북": "33",
+    "충남": "34",
+    "경북": "35",
+    "경남": "36",
+    "전북": "37",
+    "전남": "38",
+    "제주": "39",
+}
+
+# 관광 타입 코드
+CONTENT_TYPES = {
+    "관광지": "12",
+    "문화시설": "14",
+    "축제·행사": "15",
+    "레포츠": "28",
+    "숙박": "32",
+    "쇼핑": "38",
+    "음식점": "39",
+}
+
+TYPE_EMOJI = {
+    "12": "🏞️",
+    "14": "🏛️",
+    "15": "🎉",
+    "28": "🚴",
+    "32": "🏨",
+    "38": "🛍️",
+    "39": "🍽️",
+}
+
+
+# =========================================================
+# 디자인
+# =========================================================
+st.markdown(
+    """
+    <style>
+        .stApp {
+            background:
+                radial-gradient(circle at 10% 10%, #fff4cf 0, transparent 28%),
+                radial-gradient(circle at 90% 15%, #dff5ff 0, transparent 28%),
+                linear-gradient(180deg, #fffdf7 0%, #f7fbff 100%);
+        }
+
+        .block-container {
+            max-width: 1100px;
+            padding-top: 2rem;
+            padding-bottom: 4rem;
+        }
+
+        .hero {
+            padding: 2.1rem 1.4rem;
+            border-radius: 28px;
+            text-align: center;
+            background: linear-gradient(135deg, #ff7a8a, #ffb45c);
+            box-shadow: 0 14px 35px rgba(255, 122, 138, 0.24);
+            color: white;
+            margin-bottom: 1.2rem;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 5vw, 3.4rem);
+            letter-spacing: -0.06em;
+        }
+
+        .hero p {
+            margin: 0.7rem 0 0;
+            font-size: 1.05rem;
+            opacity: 0.96;
+        }
+
+        .result-card {
+            padding: 1.5rem;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(236, 217, 198, 0.85);
+            box-shadow: 0 12px 32px rgba(62, 80, 110, 0.12);
+        }
+
+        .destination-title {
+            margin: 0 0 0.65rem;
+            color: #26334d;
+            font-size: clamp(1.7rem, 4vw, 2.6rem);
+            line-height: 1.25;
+            letter-spacing: -0.04em;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.35rem 0.72rem;
+            margin: 0 0.35rem 0.45rem 0;
+            border-radius: 999px;
+            background: #fff0e5;
+            color: #d85f3b;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .info-box {
+            padding: 0.9rem 1rem;
+            border-radius: 16px;
+            background: #f6f8fc;
+            margin: 0.65rem 0;
+            color: #33415c;
+        }
+
+        .description {
+            line-height: 1.85;
+            color: #46536a;
+            word-break: keep-all;
+        }
+
+        .empty-image {
+            height: 340px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #dff3ff, #ffe8c8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            font-size: 5rem;
+            border: 1px solid #e8e8e8;
+        }
+
+        div.stButton > button {
+            width: 100%;
+            min-height: 3.25rem;
+            border: 0;
+            border-radius: 16px;
+            font-weight: 800;
+            font-size: 1.05rem;
+            color: white;
+            background: linear-gradient(135deg, #ff647c, #ff9b4a);
+            box-shadow: 0 8px 20px rgba(255, 100, 124, 0.22);
+        }
+
+        div.stButton > button:hover {
+            color: white;
+            border: 0;
+            transform: translateY(-1px);
+        }
+
+        [data-testid="stSidebar"] {
+            background: #fffaf3;
+        }
+
+        .small-note {
+            color: #758098;
+            font-size: 0.88rem;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# =========================================================
+# 공통 함수
+# =========================================================
+def get_service_key():
+    """Streamlit Secrets에서 API 키를 가져온다."""
+    try:
+        key = st.secrets["TOUR_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        return ""
+
+    # 인코딩 키와 디코딩 키 중 어느 것을 넣어도 최대한 동작하도록 처리
+    return unquote(str(key).strip())
+
+
+def clean_text(value, default="정보 없음"):
+    """None, NaN, 빈 문자열을 안전하게 처리한다."""
+    if value is None:
+        return default
+
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return default
+    return text
+
+
+def remove_html_tags(text):
+    """API 설명에 들어 있는 HTML 태그를 제거한다."""
+    if not text:
+        return ""
+
+    text = re.sub(r"<br\s*/?>", "\n", str(text), flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    return html.unescape(text).strip()
+
+
+def normalize_items(items):
+    """API가 항목 1개를 dict로 주는 경우와 여러 개를 list로 주는 경우를 통일한다."""
+    if not items:
+        return []
+
+    if isinstance(items, dict):
+        return [items]
+
+    if isinstance(items, list):
+        return items
+
+    return []
+
+
+def extract_response(json_data):
+    """TourAPI 응답에서 결과 코드, 전체 개수, 항목을 추출한다."""
+    response = json_data.get("response", {})
+    header = response.get("header", {})
+    body = response.get("body", {})
+
+    result_code = str(header.get("resultCode", ""))
+    result_message = str(header.get("resultMsg", ""))
+
+    if result_code != "0000":
+        raise RuntimeError(f"API 오류 {result_code}: {result_message}")
+
+    total_count = int(body.get("totalCount", 0) or 0)
+    items = normalize_items(body.get("items", {}).get("item", []))
+    return total_count, items
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def call_tour_api(endpoint, params_tuple):
+    """TourAPI 호출 결과를 30분 동안 캐시에 저장한다."""
+    params = dict(params_tuple)
+    response = requests.get(
+        f"{API_BASE_URL}/{endpoint}",
+        params=params,
+        timeout=15,
+    )
+    response.raise_for_status()
+
+    try:
+        return response.json()
+    except requests.exceptions.JSONDecodeError as error:
+        preview = response.text[:200]
+        raise RuntimeError(
+            "API가 JSON이 아닌 응답을 반환했습니다. "
+            f"인증키 또는 요청 주소를 확인하세요. 응답: {preview}"
+        ) from error
+
+
+def base_params(service_key):
+    return {
+        "serviceKey": service_key,
+        "MobileOS": MOBILE_OS,
+        "MobileApp": MOBILE_APP,
+        "_type": "json",
     }
-]
 
-# --- 세션 상태 초기화 ---
-if "history" not in st.session_state:
-    st.session_state.history = []
 
-# --- 헤더 ---
-st.title("🎁 랜덤 국내여행 뽑기")
-st.caption("어디로 떠날지 고민될 땐? 버튼 하나로 여행지를 결정해보세요!")
+def fetch_random_candidates(service_key, area_code, content_type_id):
+    """
+    조건에 맞는 전체 결과 수를 확인한 뒤,
+    무작위 페이지 하나를 골라 후보 최대 40개를 가져온다.
+    """
+    page_size = 40
 
-st.markdown("---")
+    first_params = base_params(service_key)
+    first_params.update(
+        {
+            "numOfRows": page_size,
+            "pageNo": 1,
+            "arrange": "R",  # 생성일순
+            "areaCode": area_code,
+            "contentTypeId": content_type_id,
+        }
+    )
 
-# --- 사이드바 필터 ---
-st.sidebar.header("🎯 여행 조건 설정")
+    first_json = call_tour_api(
+        "areaBasedList2",
+        tuple(sorted(first_params.items())),
+    )
+    total_count, first_items = extract_response(first_json)
 
-regions = ["전체"] + sorted(list(set(item["region"] for item in TRAVEL_DATA)))
-selected_region = st.sidebar.selectbox("선호 지역", regions)
+    if total_count <= page_size:
+        return first_items
 
-themes = ["전체"] + sorted(list(set(item["theme"] for item in TRAVEL_DATA)))
-selected_theme = st.sidebar.selectbox("여행 테마", themes)
+    max_page = min((total_count + page_size - 1) // page_size, 100)
+    random_page = random.randint(1, max_page)
 
-# --- 필터링 로직 ---
-filtered_data = TRAVEL_DATA
+    if random_page == 1:
+        return first_items
 
-if selected_region != "전체":
-    filtered_data = [item for item in filtered_data if item["region"] == selected_region]
+    random_params = first_params.copy()
+    random_params["pageNo"] = random_page
 
-if selected_theme != "전체":
-    filtered_data = [item for item in filtered_data if item["theme"] == selected_theme]
+    random_json = call_tour_api(
+        "areaBasedList2",
+        tuple(sorted(random_params.items())),
+    )
+    _, random_items = extract_response(random_json)
+    return random_items
 
-st.sidebar.info(f"현재 조건에 맞는 여행지: **{len(filtered_data)}곳**")
 
-# --- 뽑기 실행 영역 ---
-st.subheader("🎲 행운의 주사위를 던져보세요")
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_detail(service_key, content_id):
+    """선택된 여행지의 상세 설명을 가져온다."""
+    params = base_params(service_key)
+    params.update(
+        {
+            "contentId": content_id,
+        }
+    )
 
-if not filtered_data:
-    st.warning("선택하신 조건에 맞는 여행지가 없습니다. 필터를 변경해주세요!")
-else:
-    if st.button("🚀 여행지 뽑기!", use_container_width=True, type="primary"):
-        # 슬롯머신 랜더링 효과
-        slot_placeholder = st.empty()
-        
-        for _ in range(12):
-            temp_pick = random.choice(filtered_data)
-            slot_placeholder.markdown(
-                f"<h2 style='text-align: center; color: #888888;'>✨ {temp_pick['name']} (으)로 떠나는 중...</h2>", 
-                unsafe_allow_html=True
+    json_data = call_tour_api(
+        "detailCommon2",
+        tuple(sorted(params.items())),
+    )
+    _, items = extract_response(json_data)
+
+    if not items:
+        return {}
+    return items[0]
+
+
+def pick_destination(candidates):
+    """사진 또는 좌표가 있는 항목을 우선하여 무작위 선택한다."""
+    valid = [
+        item
+        for item in candidates
+        if clean_text(item.get("title"), "") and (
+            clean_text(item.get("firstimage"), "")
+            or (
+                clean_text(item.get("mapx"), "")
+                and clean_text(item.get("mapy"), "")
             )
-            time.sleep(0.12)
-            
-        # 최종 결정
-        final_pick = random.choice(filtered_data)
-        slot_placeholder.empty()
-        
-        st.balloons()
-        
-        # 기록 저장
-        st.session_state.history.append(final_pick['name'])
-        
-        # 결과 출력 카드
-        st.success(f"🎉 축하합니다! 이번 여행지는 **[{final_pick['name']}]** 입니다!")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric(label="지역", value=final_pick["region"])
-        with col2:
-            st.metric(label="테마", value=final_pick["theme"])
-            
-        st.markdown(f"> *\"{final_pick['desc']}\"*")
-        
-        st.markdown("### 📍 추천 명소")
-        for spot in final_pick["spots"]:
-            st.markdown(f"- {spot}")
-            
-        st.markdown("### 🍽️ 대표 먹거리")
-        for food in final_pick["food"]:
-            st.markdown(f"- {food}")
-            
-        # 네이버 지도 / 구글 지도 검색 링크 제공
-        search_query = f"{final_pick['name']} 여행"
-        map_url = f"https://map.naver.com/v5/search/{search_query}"
-        st.markdown(f"👉 [네이버 지도로 **{final_pick['name']}** 검색하기]({map_url})")
+        )
+    ]
 
-st.markdown("---")
+    pool = valid if valid else candidates
+    return random.choice(pool) if pool else None
 
-# --- 최근 뽑기 기록 ---
-if st.session_state.history:
-    with st.expander("📜 이번 세션의 뽑기 히스토리 보기"):
-        for idx, item_name in enumerate(reversed(st.session_state.history), 1):
-            st.write(f"**{idx}회차:** {item_name}")
+
+def build_map_dataframe(item):
+    """지도 표시용 데이터프레임을 만든다."""
+    try:
+        latitude = float(item.get("mapy"))
+        longitude = float(item.get("mapx"))
+    except (TypeError, ValueError):
+        return None
+
+    return pd.DataFrame(
+        {
+            "lat": [latitude],
+            "lon": [longitude],
+        }
+    )
+
+
+# =========================================================
+# 화면 상단
+# =========================================================
+st.markdown(
+    """
+    <div class="hero">
+        <h1>🎁 랜덤 국내여행 뽑기</h1>
+        <p>지역과 여행 유형을 고르고, 오늘 떠날 여행지를 뽑아보세요!</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+service_key = get_service_key()
+
+if not service_key:
+    st.error("TourAPI 인증키가 설정되지 않았습니다.")
+    st.code(
+        'TOUR_API_KEY = "공공데이터포털에서 발급받은 일반 인증키"',
+        language="toml",
+    )
+    st.info(
+        "Streamlit Cloud의 App settings → Secrets에 위 내용을 저장한 뒤 "
+        "앱을 다시 실행하세요."
+    )
+    st.stop()
+
+
+# =========================================================
+# 검색 조건
+# =========================================================
+with st.sidebar:
+    st.header("🧳 여행 조건")
+
+    selected_area = st.selectbox(
+        "어디로 떠날까요?",
+        list(AREA_CODES.keys()),
+        index=0,
+    )
+
+    selected_type = st.selectbox(
+        "무엇을 즐길까요?",
+        list(CONTENT_TYPES.keys()),
+        index=0,
+    )
+
+    image_only = st.checkbox(
+        "사진이 있는 장소만 추천",
+        value=True,
+    )
+
+    st.divider()
+    st.caption(
+        "관광정보와 이미지는 한국관광공사 TourAPI에서 불러옵니다."
+    )
+
+control_col1, control_col2 = st.columns([2, 1])
+
+with control_col1:
+    draw_clicked = st.button(
+        "🎲 여행지 뽑기",
+        type="primary",
+        use_container_width=True,
+    )
+
+with control_col2:
+    clear_clicked = st.button(
+        "🧹 결과 지우기",
+        use_container_width=True,
+    )
+
+if clear_clicked:
+    st.session_state.pop("destination", None)
+    st.session_state.pop("detail", None)
+    st.session_state.pop("selection_text", None)
+    st.rerun()
+
+
+# =========================================================
+# 여행지 뽑기
+# =========================================================
+if draw_clicked:
+    try:
+        with st.spinner("전국의 여행지를 섞고 있어요... 🎁"):
+            candidates = fetch_random_candidates(
+                service_key=service_key,
+                area_code=AREA_CODES[selected_area],
+                content_type_id=CONTENT_TYPES[selected_type],
+            )
+
+            if image_only:
+                candidates = [
+                    item
+                    for item in candidates
+                    if clean_text(item.get("firstimage"), "")
+                ]
+
+            destination = pick_destination(candidates)
+
+            if destination is None:
+                st.warning(
+                    "선택한 조건에 맞는 여행지가 없습니다. "
+                    "지역이나 여행 유형을 바꿔 다시 시도해 주세요."
+                )
+            else:
+                detail = fetch_detail(
+                    service_key,
+                    clean_text(destination.get("contentid"), ""),
+                )
+
+                st.session_state["destination"] = destination
+                st.session_state["detail"] = detail
+                st.session_state["selection_text"] = (
+                    f"{selected_area} · {selected_type}"
+                )
+
+    except requests.exceptions.Timeout:
+        st.error("관광정보 서버의 응답이 늦습니다. 잠시 후 다시 뽑아 주세요.")
+    except requests.exceptions.RequestException as error:
+        st.error(f"관광정보를 불러오지 못했습니다: {error}")
+    except (RuntimeError, ValueError) as error:
+        st.error(str(error))
+    except Exception as error:
+        st.error(f"예상하지 못한 오류가 발생했습니다: {error}")
+
+
+# =========================================================
+# 결과 화면
+# =========================================================
+if "destination" not in st.session_state:
+    st.markdown("### ✨ 오늘의 여행지를 뽑아보세요")
+    st.info(
+        "왼쪽에서 지역과 여행 유형을 선택한 다음 "
+        "‘여행지 뽑기’ 버튼을 눌러주세요."
+    )
+    st.markdown(
+        """
+        #### 이렇게 활용할 수 있어요
+        - 수업 시작 전 랜덤 여행지 퀴즈
+        - 친구·가족과 주말 여행지 정하기
+        - 국내 관광지 탐색 프로젝트
+        """
+    )
+    st.stop()
+
+destination = st.session_state["destination"]
+detail = st.session_state.get("detail", {})
+
+title = clean_text(destination.get("title"), "이름 없는 여행지")
+address = " ".join(
+    part
+    for part in [
+        clean_text(destination.get("addr1"), ""),
+        clean_text(destination.get("addr2"), ""),
+    ]
+    if part
+).strip() or "주소 정보 없음"
+
+image_url = clean_text(destination.get("firstimage"), "")
+thumbnail_url = clean_text(destination.get("firstimage2"), "")
+image_url = image_url or thumbnail_url
+
+content_type_id = clean_text(destination.get("contenttypeid"), "")
+emoji = TYPE_EMOJI.get(content_type_id, "📍")
+selection_text = st.session_state.get("selection_text", "랜덤 여행")
+
+overview = remove_html_tags(detail.get("overview", ""))
+homepage = clean_text(detail.get("homepage"), "")
+tel = clean_text(
+    detail.get("tel") or destination.get("tel"),
+    "",
+)
+zipcode = clean_text(
+    detail.get("zipcode") or destination.get("zipcode"),
+    "",
+)
+
+st.success(f"🎉 오늘의 여행지가 선정되었습니다!  ·  {selection_text}")
+
+left_col, right_col = st.columns([1.15, 1], gap="large")
+
+with left_col:
+    if image_url:
+        st.image(
+            image_url,
+            caption=f"{title} 관광 이미지",
+            use_container_width=True,
+        )
+    else:
+        st.markdown(
+            f"""
+            <div class="empty-image">
+                <div>{emoji}</div>
+                <div style="font-size:1rem; margin-top:0.5rem;">
+                    제공된 이미지가 없습니다
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+with right_col:
+    safe_title = html.escape(title)
+    safe_address = html.escape(address)
+    safe_zipcode = html.escape(zipcode)
+    safe_tel = html.escape(tel)
+
+    st.markdown(
+        f"""
+        <div class="result-card">
+            <span class="badge">{emoji} {html.escape(selection_text)}</span>
+            <h2 class="destination-title">{safe_title}</h2>
+            <div class="info-box">📍 <strong>주소</strong><br>{safe_address}</div>
+            {
+                f'<div class="info-box">☎️ <strong>전화</strong><br>{safe_tel}</div>'
+                if tel else ''
+            }
+            {
+                f'<div class="info-box">📮 <strong>우편번호</strong><br>{safe_zipcode}</div>'
+                if zipcode else ''
+            }
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    mapx = clean_text(destination.get("mapx"), "")
+    mapy = clean_text(destination.get("mapy"), "")
+
+    if mapx and mapy:
+        naver_map_url = (
+            "https://map.naver.com/p/search/"
+            + requests.utils.quote(title)
+        )
+        st.link_button(
+            "🗺️ 네이버 지도에서 보기",
+            naver_map_url,
+            use_container_width=True,
+        )
+
+    if homepage and homepage != "정보 없음":
+        # homepage 필드에 HTML 링크가 포함될 수 있으므로 그대로 출력
+        st.markdown("🌐 **관련 홈페이지**")
+        st.markdown(homepage, unsafe_allow_html=True)
+
+st.divider()
+
+st.subheader("📖 여행지 소개")
+if overview:
+    safe_overview = html.escape(overview).replace("\n", "<br>")
+    st.markdown(
+        f'<div class="result-card description">{safe_overview}</div>',
+        unsafe_allow_html=True,
+    )
+else:
+    st.info("이 여행지에는 상세 소개가 등록되어 있지 않습니다.")
+
+map_df = build_map_dataframe(destination)
+if map_df is not None:
+    st.subheader("🗺️ 위치")
+    st.map(map_df, zoom=11, use_container_width=True)
+
+st.caption(
+    "※ 여행 전 운영시간, 휴무일, 이용요금 등 최신 정보를 관련 기관에 확인하세요."
+)

@@ -182,14 +182,15 @@ st.markdown(
         }
 
         .no-image {
-            height: 250px;
+            height: 240px;
             display: flex;
-            align-items: center;
+            flex-direction: column;
             justify-content: center;
+            align-items: center;
             border-radius: 16px;
-            background: linear-gradient(135deg, #fff0f4, #fff7df);
-            color: #9b6d79;
-            font-weight: 700;
+            background: linear-gradient(135deg, #FFE7F2, #FFF7CC, #E8F7FF);
+            color: #444;
+            text-align: center;
         }
 
         /* 랜덤 추천 */

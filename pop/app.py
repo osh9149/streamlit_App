@@ -171,13 +171,32 @@ def find_column(columns, suffix):
 
 def find_age_column(columns, gender, age):
     """
-    gender: 계, 남, 여
-    age: 0~99 또는 100
+    연령별 인구 열을 찾는다.
+
+    CSV 열 이름에 공백이 있거나 기준월 표기가 조금 달라도
+    '_계_10세', '_남_10세', '_여_10세' 형태를 기준으로 찾는다.
     """
     age_text = "100세 이상" if age == 100 else f"{age}세"
-    pattern = re.compile(rf"^\d{{4}}년\d{{2}}월_{gender}_{re.escape(age_text)}$")
-    matches = [column for column in columns if pattern.match(str(column))]
-    return matches[0] if matches else None
+    target_suffix = f"_{gender}_{age_text}"
+
+    for column in columns:
+        # 열 이름 내부의 불필요한 공백 제거
+        normalized_column = re.sub(
+            r"\s+",
+            "",
+            str(column),
+        )
+
+        normalized_target = re.sub(
+            r"\s+",
+            "",
+            target_suffix,
+        )
+
+        if normalized_column.endswith(normalized_target):
+            return column
+
+    return None
 
 
 @st.cache_data(show_spinner=False)

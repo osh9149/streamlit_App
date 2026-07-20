@@ -433,7 +433,140 @@ def make_quiz_question(population_data):
         "explanation": explanation,
     }
 
+# =========================================================
+# 비슷한 지역 찾기 함수
+# =========================================================
+def build_population_profiles(population, age_detail):
+    """5세 단위 연령비율 프로필 생성"""
+    profiles = {}
 
+    age_bins = list(range(0, 101, 5))
+
+    for code in population["행정구역코드"]:
+        temp = age_detail[age_detail["행정구역코드"] == code].copy()
+
+        if temp.empty:
+            continue
+
+        temp["5세구간"] = (temp["연령"] // 5) * 5
+        temp.loc[temp["연령"] == 100, "5세구간"] = 100
+
+        grouped = (
+            temp.groupby("5세구간")[["남자", "여자"]]
+            .sum()
+            .sum(axis=1)
+        )
+
+        grouped = grouped.reindex(age_bins, fill_value=0)
+
+        total = grouped.sum()
+
+        if total == 0:
+            continue
+
+        profiles[code] = grouped / total
+
+    return profiles
+
+
+def find_similar_regions(base_code, population, profiles, top_n=5):
+    """유클리드 거리 기반 유사 지역"""
+    base = profiles[base_code]
+
+    result = []
+
+    for code, profile in profiles.items():
+        if code == base_code:
+            continue
+
+        distance = np.linalg.norm(base.values - profile.values)
+
+        similarity = max(0, 100 - distance * 350)
+
+        region = population.loc[
+            population["행정구역코드"] == code
+        ].iloc[0]
+
+        result.append(
+            {
+                "지역명": region["지역명"],
+                "행정구역코드": code,
+                "유사도": similarity,
+            }
+        )
+
+    return (
+        pd.DataFrame(result)
+        .sort_values("유사도", ascending=False)
+        .head(top_n)
+    )
+
+
+def make_age_structure_chart(base_code, compare_code, age_detail, population):
+    """5세 단위 연령구조 비교"""
+
+    def make_series(code):
+        temp = age_detail[
+            age_detail["행정구역코드"] == code
+        ].copy()
+
+        temp["5세구간"] = (temp["연령"] // 5) * 5
+        temp.loc[temp["연령"] == 100, "5세구간"] = 100
+
+        grouped = (
+            temp.groupby("5세구간")[["남자", "여자"]]
+            .sum()
+            .sum(axis=1)
+        )
+
+        grouped = grouped.reindex(list(range(0,101,5)), fill_value=0)
+
+        return grouped / grouped.sum() * 100
+
+    s1 = make_series(base_code)
+    s2 = make_series(compare_code)
+
+    labels = [
+        "0~4","5~9","10~14","15~19","20~24",
+        "25~29","30~34","35~39","40~44","45~49",
+        "50~54","55~59","60~64","65~69","70~74",
+        "75~79","80~84","85~89","90~94","95~99","100+"
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=labels,
+            y=s1.values,
+            mode="lines+markers",
+            name=population.loc[
+                population["행정구역코드"]==base_code,
+                "지역명"
+            ].iloc[0],
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=labels,
+            y=s2.values,
+            mode="lines+markers",
+            name=population.loc[
+                population["행정구역코드"]==compare_code,
+                "지역명"
+            ].iloc[0],
+        )
+    )
+
+    fig.update_layout(
+        title="5세 단위 연령구조 비교",
+        yaxis_title="비율(%)",
+        xaxis_title=""
+    )
+
+    return fig
+    
 # =========================================================
 # 파일 불러오기
 # =========================================================
@@ -736,6 +869,103 @@ elif menu == "⚔️ 지역 인구 배틀":
 # 3. 비슷한 지역 찾기
 # =========================================================
 elif menu == "🧩 비슷한 지역 찾기":
+
+    st.subheader("🧩 비슷한 지역 찾기")
+
+    region = region_selector(
+        population,
+        "기준 지역",
+        "similar"
+    )
+
+    row = get_region_row(population, region)
+
+    profiles = build_population_profiles(
+        population,
+        age_detail
+    )
+
+    code = row["행정구역코드"]
+
+    same_sido = st.checkbox(
+        "같은 시도 안에서만 찾기",
+        value=False
+    )
+
+    top_n = st.slider(
+        "추천 개수",
+        3,
+        10,
+        5
+    )
+
+    similar = find_similar_regions(
+        code,
+        population,
+        profiles,
+        top_n=20
+    )
+
+    if same_sido:
+        similar = similar.merge(
+            population[
+                ["행정구역코드","시도"]
+            ],
+            on="행정구역코드"
+        )
+
+        similar = similar[
+            similar["시도"] == row["시도"]
+        ].head(top_n)
+
+    else:
+        similar = similar.head(top_n)
+
+    st.success(
+        f"'{region}'와 가장 비슷한 지역입니다."
+    )
+
+    st.dataframe(
+        similar[["지역명","유사도"]],
+        hide_index=True,
+        use_container_width=True
+    )
+
+    fig = px.bar(
+        similar,
+        x="유사도",
+        y="지역명",
+        orientation="h",
+        text="유사도",
+        title="유사도 순위"
+    )
+
+    fig.update_traces(texttemplate="%.1f점")
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    compare_region = st.selectbox(
+        "연령구조 비교",
+        similar["지역명"]
+    )
+
+    compare_code = population.loc[
+        population["지역명"] == compare_region,
+        "행정구역코드"
+    ].iloc[0]
+
+    st.plotly_chart(
+        make_age_structure_chart(
+            code,
+            compare_code,
+            age_detail,
+            population,
+        ),
+        use_container_width=True,
+    )
 
     
 # =========================================================

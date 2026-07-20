@@ -613,15 +613,6 @@ with st.sidebar:
         st.error(f"데이터를 불러오는 중 문제가 발생했습니다.\n\n{error}")
         st.stop()
 
-        raw_data = read_population_csv(default_path)
-        source_name = DEFAULT_CSV
-
-    population_all, age_detail = prepare_population_data(raw_data)
-
-except Exception as error:
-    st.error(f"데이터를 불러오는 중 문제가 발생했습니다: {error}")
-    st.stop()
-
 
 # 앱의 비교·추천·퀴즈에는 시군구 행만 사용
 population = population_all[population_all["지역단계"] == "시군구"].copy()

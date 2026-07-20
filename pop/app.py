@@ -8,6 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+DEFAULT_CSV = "202606_202606_연령별인구현황_월간(5).csv"
 
 # =========================================================
 # 기본 설정

@@ -18,7 +18,7 @@ st.set_page_config(
     layout="wide",
 )
 
-DEFAULT_CSV = "202606_202606_연령별인구현황_월간(10).csv"
+DEFAULT_CSV = "202606_연령별인구현황.csv"
 
 
 # =========================================================
@@ -171,21 +171,18 @@ def find_column(columns, suffix):
     return matches[0] if matches else None
 
 
-def find_age_group_column(columns, gender, age_group):
-    """
-    10세 단위 연령 구간 열을 찾는다.
-
-    예:
-    2026년06월_계_0~9세
-    2026년06월_남_10~19세
-    2026년06월_여_100세 이상
-    """
-    target_suffix = f"_{gender}_{age_group}"
+def find_age_column(columns, gender, age):
+    """행정안전부 CSV에서 성별·1세 단위 연령 열을 찾는다."""
+    age_text = "100세 이상" if age == 100 else f"{age}세"
+    target_suffix = f"_{gender}_{age_text}"
+    normalized_target = re.sub(r"\s+", "", target_suffix)
 
     for column in columns:
-        normalized_column = re.sub(r"\s+", "", str(column).replace("\ufeff", ""))
-        normalized_target = re.sub(r"\s+", "", target_suffix)
-
+        normalized_column = re.sub(
+            r"\s+",
+            "",
+            str(column).replace("\ufeff", ""),
+        )
         if normalized_column.endswith(normalized_target):
             return column
 
@@ -194,14 +191,10 @@ def find_age_group_column(columns, gender, age_group):
 
 @st.cache_data(show_spinner=False)
 def prepare_population_data(raw_df):
-    """
-    행정안전부 10세 단위 연령별 인구 CSV를 앱 분석용 데이터로 변환한다.
-
-    첨부 데이터는 0~9세, 10~19세처럼 10세 단위로 구성되어 있으므로
-    유소년·생산가능·고령인구는 구간을 절반씩 나누어 추정한다.
-    """
+    """행정안전부 1세 단위 연령별 인구 CSV를 앱 분석용으로 변환한다."""
     df = raw_df.copy()
 
+    # 열 이름의 BOM, 줄바꿈, 불필요한 공백 정리
     df.columns = [
         re.sub(r"\s+", " ", str(column).replace("\ufeff", "")).strip()
         for column in df.columns
@@ -214,6 +207,7 @@ def prepare_population_data(raw_df):
     df["지역명"] = parsed.str[0]
     df["행정구역코드"] = parsed.str[1]
 
+    # 행정계층 구분
     df["지역단계"] = np.select(
         [
             df["행정구역코드"].str.endswith("00000000"),
@@ -223,6 +217,7 @@ def prepare_population_data(raw_df):
         default="읍면동",
     )
 
+    # 기준월 추출
     month_match = re.search(r"(\d{4}년\s*\d{2}월)", " ".join(df.columns))
     base_month = (
         re.sub(r"\s+", "", month_match.group(1))
@@ -251,26 +246,15 @@ def prepare_population_data(raw_df):
         }
     )
 
-    age_groups = [
-        "0~9세",
-        "10~19세",
-        "20~29세",
-        "30~39세",
-        "40~49세",
-        "50~59세",
-        "60~69세",
-        "70~79세",
-        "80~89세",
-        "90~99세",
-        "100세 이상",
-    ]
-
+    # 0세부터 100세 이상까지 1세 단위 데이터를 읽는다.
     age_values = {}
     found_columns = {"계": 0, "남": 0, "여": 0}
 
     for gender in ["계", "남", "여"]:
-        for age_group in age_groups:
-            column = find_age_group_column(df.columns, gender, age_group)
+        gender_age_columns = []
+
+        for age in range(101):
+            column = find_age_column(df.columns, gender, age)
 
             if column is None:
                 values = pd.Series(0, index=df.index, dtype=float)
@@ -278,54 +262,55 @@ def prepare_population_data(raw_df):
                 values = clean_number(df[column])
                 found_columns[gender] += 1
 
-            age_values[(gender, age_group)] = values
+            age_values[(gender, age)] = values
+            gender_age_columns.append(values)
 
-    if found_columns["계"] == 0:
+        age_values[(gender, "합계")] = pd.concat(
+            gender_age_columns,
+            axis=1,
+        ).sum(axis=1)
+
+    if found_columns["계"] < 101:
         raise ValueError(
-            "10세 단위 연령별 인구 열을 찾지 못했습니다. "
-            "첨부한 월간(10) CSV 파일인지 확인해 주세요."
+            "1세 단위 연령별 인구 열을 모두 찾지 못했습니다. "
+            f"찾은 열 개수: {found_columns}"
         )
 
-    age_0_9 = age_values[("계", "0~9세")]
-    age_10_19 = age_values[("계", "10~19세")]
-    age_20_29 = age_values[("계", "20~29세")]
-    age_30_39 = age_values[("계", "30~39세")]
-    age_40_49 = age_values[("계", "40~49세")]
-    age_50_59 = age_values[("계", "50~59세")]
-    age_60_69 = age_values[("계", "60~69세")]
-    age_70_plus = sum(
-        age_values[("계", group)]
-        for group in ["70~79세", "80~89세", "90~99세", "100세 이상"]
-    )
+    # 1세 단위이므로 연령 3계층을 정확하게 계산할 수 있다.
+    result["유소년인구"] = pd.concat(
+        [age_values[("계", age)] for age in range(0, 15)],
+        axis=1,
+    ).sum(axis=1)
 
-    result["유소년인구"] = age_0_9 + age_10_19 * 0.5
-    result["생산가능인구"] = (
-        age_10_19 * 0.5
-        + age_20_29
-        + age_30_39
-        + age_40_49
-        + age_50_59
-        + age_60_69 * 0.5
-    )
-    result["고령인구"] = age_60_69 * 0.5 + age_70_plus
+    result["생산가능인구"] = pd.concat(
+        [age_values[("계", age)] for age in range(15, 65)],
+        axis=1,
+    ).sum(axis=1)
 
+    result["고령인구"] = pd.concat(
+        [age_values[("계", age)] for age in range(65, 101)],
+        axis=1,
+    ).sum(axis=1)
+
+    # 인구 피라미드와 10세 단위 분석용 1세 단위 데이터
     age_rows = []
     for idx in df.index:
-        for order, age_group in enumerate(age_groups):
+        for age in range(101):
             age_rows.append(
                 {
                     "행정구역코드": result.loc[idx, "행정구역코드"],
                     "지역명": result.loc[idx, "지역명"],
-                    "연령대": age_group,
-                    "연령순서": order,
-                    "남자": int(age_values[("남", age_group)].loc[idx]),
-                    "여자": int(age_values[("여", age_group)].loc[idx]),
-                    "전체": int(age_values[("계", age_group)].loc[idx]),
+                    "연령": age,
+                    "연령표시": "100세 이상" if age == 100 else f"{age}세",
+                    "남자": int(age_values[("남", age)].loc[idx]),
+                    "여자": int(age_values[("여", age)].loc[idx]),
+                    "전체": int(age_values[("계", age)].loc[idx]),
                 }
             )
 
     age_df = pd.DataFrame(age_rows)
 
+    # 비율 계산
     denominator = result["총인구수"].replace(0, np.nan)
     result["남자비율"] = result["남자인구수"] / denominator * 100
     result["여자비율"] = result["여자인구수"] / denominator * 100
@@ -346,8 +331,9 @@ def prepare_population_data(raw_df):
         .fillna(0)
     )
 
+    # 시도 이름 분리
     sido_rows = result[result["지역단계"] == "시도"].copy()
-    sido_names = sorted(sido_rows["지역명"].unique())
+    sido_names = sorted(sido_rows["지역명"].dropna().unique())
 
     def get_sido_name(region_name):
         matched = [
@@ -369,7 +355,6 @@ def prepare_population_data(raw_df):
 
     result = result[result["총인구수"] > 0].reset_index(drop=True)
     return result, age_df
-
 
 def format_population(value):
     return f"{int(value):,}명"
@@ -522,19 +507,8 @@ def make_quiz_question(population_data):
 # 읍면동 인구 구조 분석 함수
 # =========================================================
 def build_decade_profiles(dong_population, age_detail):
-    """읍면동별 10대~90대 인구 비율을 만든다."""
-    decade_map = {
-        "10~19세": "10대",
-        "20~29세": "20대",
-        "30~39세": "30대",
-        "40~49세": "40대",
-        "50~59세": "50대",
-        "60~69세": "60대",
-        "70~79세": "70대",
-        "80~89세": "80대",
-        "90~99세": "90대",
-    }
-
+    """읍면동별 10대부터 90대까지의 인구 비율을 만든다."""
+    labels = [f"{decade}대" for decade in range(10, 100, 10)]
     profiles = {}
 
     for _, region in dong_population.iterrows():
@@ -543,41 +517,24 @@ def build_decade_profiles(dong_population, age_detail):
             age_detail["행정구역코드"] == region_code
         ].copy()
 
-        if region_age.empty:
+        if region_age.empty or region["총인구수"] <= 0:
             continue
 
-        region_age = region_age[
-            region_age["연령대"].isin(decade_map.keys())
-        ].copy()
-
-        if region_age.empty:
-            continue
-
-        region_age["연령표시"] = region_age["연령대"].map(decade_map)
-        region_age["전체인구"] = region_age["남자"] + region_age["여자"]
-        total_population = region["총인구수"]
-
-        if total_population <= 0:
-            continue
-
-        ordered_labels = list(decade_map.values())
-        ratio_map = dict(
-            zip(
-                region_age["연령표시"],
-                region_age["전체인구"] / total_population * 100,
-            )
-        )
+        ratios = []
+        for start_age in range(10, 100, 10):
+            end_age = start_age + 9
+            decade_population = region_age.loc[
+                region_age["연령"].between(start_age, end_age),
+                "전체",
+            ].sum()
+            ratios.append(decade_population / region["총인구수"] * 100)
 
         profiles[region_code] = {
-            "연령대": ordered_labels,
-            "비율": np.array(
-                [ratio_map.get(label, 0) for label in ordered_labels],
-                dtype=float,
-            ),
+            "연령대": labels,
+            "비율": np.array(ratios, dtype=float),
         }
 
     return profiles
-
 
 def find_similar_dongs(
     selected_code,
@@ -795,42 +752,64 @@ if menu == "🔎 인구 한눈에 보기":
         )
         right.plotly_chart(age_group_chart, use_container_width=True)
 
-        # 10세 단위 인구 피라미드
+        # 1세 단위 데이터를 5세 단위로 묶어 인구 피라미드 표시
         region_age = age_detail[
             age_detail["행정구역코드"] == row["행정구역코드"]
         ].copy()
 
-        region_age = region_age.sort_values("연령순서")
-        region_age["남자표시"] = -region_age["남자"]
+        region_age["연령대"] = region_age["연령"].apply(
+            lambda age: (
+                "100세 이상"
+                if age == 100
+                else f"{(age // 5) * 5}~{(age // 5) * 5 + 4}세"
+            )
+        )
+
+        pyramid = (
+            region_age.groupby("연령대", as_index=False)[["남자", "여자"]]
+            .sum()
+        )
+
+        age_order = [
+            f"{start}~{start + 4}세" for start in range(0, 100, 5)
+        ] + ["100세 이상"]
+
+        pyramid["연령대"] = pd.Categorical(
+            pyramid["연령대"],
+            categories=age_order,
+            ordered=True,
+        )
+        pyramid = pyramid.sort_values("연령대")
+        pyramid["남자표시"] = -pyramid["남자"]
 
         figure = go.Figure()
         figure.add_bar(
-            y=region_age["연령대"],
-            x=region_age["남자표시"],
+            y=pyramid["연령대"],
+            x=pyramid["남자표시"],
             name="남자",
             orientation="h",
-            customdata=region_age["남자"],
+            customdata=pyramid["남자"],
             hovertemplate="남자 %{customdata:,}명<extra></extra>",
         )
         figure.add_bar(
-            y=region_age["연령대"],
-            x=region_age["여자"],
+            y=pyramid["연령대"],
+            x=pyramid["여자"],
             name="여자",
             orientation="h",
             hovertemplate="여자 %{x:,}명<extra></extra>",
         )
         figure.update_layout(
-            title="10세 단위 인구 피라미드",
+            title="5세 단위 인구 피라미드",
             barmode="relative",
-            height=620,
+            height=700,
             xaxis_title="인구수",
             yaxis_title="",
         )
         st.plotly_chart(figure, use_container_width=True)
 
         st.caption(
-            "유소년(0~14세), 생산가능(15~64세), 고령인구(65세 이상)는 "
-            "10세 단위 자료의 경계 구간을 절반씩 나누어 추정한 값입니다."
+            "유소년(0~14세), 생산가능인구(15~64세), 고령인구(65세 이상)는 "
+            "1세 단위 인구 자료를 기준으로 정확하게 계산했습니다."
         )
 
 
@@ -888,7 +867,6 @@ elif menu == "⚔️ 지역 인구 배틀":
             var_name="지역",
             value_name="값",
         )
-        
         battle_chart = px.bar(
             long_comparison,
             x="항목",
@@ -897,10 +875,6 @@ elif menu == "⚔️ 지역 인구 배틀":
             barmode="group",
             text_auto=".1f",
             title="지역별 주요 지표 비교",
-            color_discrete_sequence=[
-            "#D94B64",   # 빨강
-            "#4A6FE3",   # 파랑
-            ],
         )
         st.plotly_chart(battle_chart, use_container_width=True)
 

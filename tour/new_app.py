@@ -1,7 +1,5 @@
 import html
 import random
-import re
-from html import unescape
 from datetime import date, datetime, timedelta
 
 import folium
@@ -176,41 +174,6 @@ st.markdown(
             color: #5f5558;
         }
 
-        .festival-title-link {
-            color: #d93f68 !important;
-            text-decoration: none !important;
-            font-weight: 900;
-            transition: color 0.15s ease;
-        }
-
-        .festival-title-link:hover {
-            color: #ff6f91 !important;
-            text-decoration: underline !important;
-            text-underline-offset: 4px;
-        }
-
-        .link-icon {
-            display: inline-block;
-            margin-left: 0.25rem;
-            font-size: 0.85rem;
-        }
-
-        .homepage-notice {
-            display: inline-block;
-            padding: 0.34rem 0.65rem;
-            margin: 0 0 0.55rem 0;
-            border-radius: 999px;
-            background: #fff0f4;
-            color: #bf4767;
-            font-size: 0.76rem;
-            font-weight: 700;
-        }
-
-        .homepage-notice.no-link {
-            background: #f5f3f3;
-            color: #8a7d80;
-        }
-
         .festival-image {
             width: 100%;
             height: 250px;
@@ -311,8 +274,6 @@ AREA_CODES = {
 }
 
 API_URL = "https://apis.data.go.kr/B551011/KorService2/searchFestival2"
-DETAIL_COMMON_URL = "https://apis.data.go.kr/B551011/KorService2/detailCommon2"
-DETAIL_INTRO_URL = "https://apis.data.go.kr/B551011/KorService2/detailIntro2"
 
 
 # ---------------------------------------------------------
@@ -472,170 +433,6 @@ def request_festivals(
     return items, ""
 
 
-def extract_url(value):
-    """API가 반환한 HTML 또는 문자열에서 실제 홈페이지 주소를 추출한다."""
-    if value is None or pd.isna(value):
-        return ""
-
-    text = unescape(str(value)).strip()
-
-    if not text:
-        return ""
-
-    href_match = re.search(
-        r"href\s*=\s*[\"']([^\"']+)[\"']",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    if href_match:
-        url = href_match.group(1).strip()
-    else:
-        url_match = re.search(
-            r"https?://[^\s<>\"']+",
-            text,
-            flags=re.IGNORECASE,
-        )
-        url = url_match.group(0).strip() if url_match else ""
-
-    if not url:
-        return ""
-
-    url = url.rstrip(".,);]}>")
-
-    if not url.lower().startswith(("http://", "https://")):
-        return ""
-
-    return url
-
-
-def get_api_items(payload):
-    """TourAPI 응답에서 item 목록을 안전하게 꺼낸다."""
-    if not isinstance(payload, dict):
-        return []
-
-    items_container = (
-        payload.get("response", {})
-        .get("body", {})
-        .get("items", {})
-    )
-
-    if not isinstance(items_container, dict):
-        return []
-
-    items = items_container.get("item", [])
-
-    if isinstance(items, dict):
-        return [items]
-
-    if isinstance(items, list):
-        return items
-
-    return []
-
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def request_festival_homepage(service_key, content_id):
-    """축제 공식 홈페이지를 조회하고, 없으면 공통정보 홈페이지를 조회한다."""
-    content_id = safe_text(content_id, "")
-
-    if not service_key or not content_id:
-        return ""
-
-    base_params = {
-        "serviceKey": service_key,
-        "MobileOS": "ETC",
-        "MobileApp": "FestivalSearchApp",
-        "_type": "json",
-        "pageNo": 1,
-        "numOfRows": 1,
-        "contentId": content_id,
-    }
-
-    intro_params = base_params.copy()
-    intro_params["contentTypeId"] = "15"
-
-    try:
-        response = requests.get(
-            DETAIL_INTRO_URL,
-            params=intro_params,
-            timeout=10,
-        )
-        response.raise_for_status()
-        payload = response.json()
-
-        if not extract_api_error(payload):
-            intro_items = get_api_items(payload)
-
-            if intro_items:
-                homepage = extract_url(
-                    intro_items[0].get("eventhomepage", "")
-                )
-                if homepage:
-                    return homepage
-
-    except (requests.RequestException, ValueError, AttributeError):
-        pass
-
-    common_params = base_params.copy()
-    common_params.update(
-        {
-            "defaultYN": "Y",
-            "firstImageYN": "N",
-            "areacodeYN": "N",
-            "catcodeYN": "N",
-            "addrinfoYN": "N",
-            "mapinfoYN": "N",
-            "overviewYN": "N",
-        }
-    )
-
-    try:
-        response = requests.get(
-            DETAIL_COMMON_URL,
-            params=common_params,
-            timeout=10,
-        )
-        response.raise_for_status()
-        payload = response.json()
-
-        if not extract_api_error(payload):
-            common_items = get_api_items(payload)
-
-            if common_items:
-                homepage = extract_url(
-                    common_items[0].get("homepage", "")
-                )
-                if homepage:
-                    return homepage
-
-    except (requests.RequestException, ValueError, AttributeError):
-        pass
-
-    return ""
-
-
-def add_homepage_links(df, service_key):
-    """검색된 축제별 홈페이지 주소를 DataFrame에 추가한다."""
-    if df.empty:
-        return df
-
-    result_df = df.copy()
-
-    if "contentid" not in result_df.columns:
-        result_df["홈페이지"] = ""
-        return result_df
-
-    result_df["홈페이지"] = result_df["contentid"].apply(
-        lambda content_id: request_festival_homepage(
-            service_key,
-            content_id,
-        )
-    )
-
-    return result_df
-
-
 def prepare_dataframe(items, keyword):
     """API 결과를 DataFrame으로 변환하고 화면 표시용 열을 정리한다."""
     if not items:
@@ -644,7 +441,6 @@ def prepare_dataframe(items, keyword):
     df = pd.DataFrame(items).copy()
 
     required_columns = [
-        "contentid",
         "title",
         "addr1",
         "firstimage",
@@ -701,12 +497,11 @@ def prepare_dataframe(items, keyword):
 
 
 def festival_card_html(row):
-    """축제 한 건을 홈페이지 링크가 포함된 카드 HTML로 만든다."""
+    """축제 한 건을 카드 형태의 HTML로 만든다."""
     title = html.escape(safe_text(row.get("축제명"), "축제명 없음"))
     period = html.escape(safe_text(row.get("기간"), "기간 정보 없음"))
     address = html.escape(safe_text(row.get("주소"), "주소 정보 없음"))
     image_url = safe_text(row.get("firstimage"), "")
-    homepage = safe_text(row.get("홈페이지"), "")
 
     if image_url:
         safe_image_url = html.escape(image_url, quote=True)
@@ -715,46 +510,12 @@ def festival_card_html(row):
             f'alt="{title}" loading="lazy">'
         )
     else:
-        image_section = (
-            '<div class="no-image">'
-            '🎪 이미지를 준비하고 있어요.'
-            '</div>'
-        )
-
-    if homepage:
-        safe_homepage = html.escape(homepage, quote=True)
-        title_section = f"""
-            <h3>
-                <a
-                    class="festival-title-link"
-                    href="{safe_homepage}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="공식 홈페이지 새 창에서 열기"
-                >
-                    🎪 {title}
-                    <span class="link-icon">🔗</span>
-                </a>
-            </h3>
-        """
-        homepage_notice = (
-            '<div class="homepage-notice">'
-            '✨ 제목을 누르면 공식 홈페이지로 이동합니다.'
-            '</div>'
-        )
-    else:
-        title_section = f"<h3>🎪 {title}</h3>"
-        homepage_notice = (
-            '<div class="homepage-notice no-link">'
-            '📌 등록된 공식 홈페이지가 없습니다.'
-            '</div>'
-        )
+        image_section = '<div class="no-image">이미지가 제공되지 않습니다.</div>'
 
     return f"""
         <div class="festival-card">
             {image_section}
-            {title_section}
-            {homepage_notice}
+            <h3>🎪 {title}</h3>
             <p><strong>📅 기간</strong><br>{period}</p>
             <p><strong>📍 주소</strong><br>{address}</p>
         </div>
@@ -1052,14 +813,6 @@ if search_clicked:
             st.session_state.search_message = error_message
         else:
             result_df = prepare_dataframe(items, keyword)
-
-            if not result_df.empty:
-                with st.spinner("축제 공식 홈페이지를 연결하는 중입니다..."):
-                    result_df = add_homepage_links(
-                        result_df,
-                        SERVICE_KEY,
-                    )
-
             st.session_state.festival_df = result_df
 
             if result_df.empty:

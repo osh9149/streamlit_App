@@ -510,7 +510,20 @@ def festival_card_html(row):
             f'alt="{title}" loading="lazy">'
         )
     else:
-        image_section = '<div class="no-image">이미지가 제공되지 않습니다.</div>'
+        image_section = """
+        <div class="no-image">
+            <div style="font-size:70px;">🎆</div>
+            <div style="font-size:42px; margin-top:8px;">
+                🎪 🎈 🎊
+            </div>
+            <div style="font-size:20px; font-weight:bold; margin-top:14px; color:#E6517A;">
+                축제 이미지 준비중
+            </div>
+            <div style="font-size:15px; color:#666; margin-top:8px;">
+                즐거운 축제를 만나보세요 😊
+            </div>
+        </div>
+        """
 
     return f"""
         <div class="festival-card">

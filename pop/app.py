@@ -80,13 +80,23 @@ st.markdown(
         margin-bottom: 1rem;
     }
 
-    div[data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.88);
-        border: 1px solid #eef0f4;
-        padding: 0.8rem;
-        border-radius: 18px;
-        box-shadow: 0 5px 14px rgba(70, 80, 110, 0.07);
-    }
+/* Metric 제목 */
+div[data-testid="stMetricLabel"] {
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+}
+
+/* Metric 숫자 */
+div[data-testid="stMetricValue"] {
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+    line-height: 1.1 !important;
+}
+
+/* Metric 숫자 안의 글자 */
+div[data-testid="stMetricValue"] > div {
+    font-size: 1.8rem !important;
+}
 
     div.stButton > button {
         border-radius: 14px;

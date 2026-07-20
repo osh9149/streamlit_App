@@ -8,7 +8,7 @@ import plotly.express as px
 import requests
 import streamlit as st
 from folium.plugins import MarkerCluster
-from streamlit_folium import st_folium
+from streamlit_folium import folium_static
 
 
 # ---------------------------------------------------------
@@ -424,21 +424,27 @@ def show_recommendation(row):
 
 
 def build_festival_map(df):
-    """좌표가 있는 축제를 Folium 지도에 표시한다."""
+    """좌표가 있는 축제를 대한민국 중심의 Folium 지도에 표시한다."""
     map_df = df.dropna(subset=["위도", "경도"]).copy()
+
+    # 대한민국 주변의 정상적인 좌표만 사용한다.
     map_df = map_df[
-        map_df["위도"].between(30, 39)
+        map_df["위도"].between(33, 39)
         & map_df["경도"].between(124, 132)
     ]
 
     if map_df.empty:
         return None, 0
 
-    center = [map_df["위도"].mean(), map_df["경도"].mean()]
+    # 대한민국 중심 좌표를 고정하여 지도를 생성한다.
+    # fit_bounds()를 사용하지 않아 세계지도 수준으로 축소되는 현상을 방지한다.
     festival_map = folium.Map(
-        location=center,
+        location=[36.35, 127.8],
         zoom_start=7,
+        min_zoom=6,
+        max_zoom=18,
         tiles="OpenStreetMap",
+        control_scale=True,
     )
 
     marker_cluster = MarkerCluster().add_to(festival_map)
@@ -462,15 +468,6 @@ def build_festival_map(df):
             popup=folium.Popup(popup_html, max_width=300),
             icon=folium.Icon(color="red", icon="info-sign"),
         ).add_to(marker_cluster)
-
-    # 모든 마커가 화면에 들어오도록 지도 범위를 조정한다.
-    if len(map_df) > 1:
-        festival_map.fit_bounds(
-            [
-                [map_df["위도"].min(), map_df["경도"].min()],
-                [map_df["위도"].max(), map_df["경도"].max()],
-            ]
-        )
 
     return festival_map, len(map_df)
 
@@ -688,11 +685,10 @@ if st.session_state.has_searched and not festival_df.empty:
             st.info("위도와 경도 정보가 있는 축제가 없어 지도를 표시할 수 없습니다.")
         else:
             st.caption(f"지도에 표시된 축제: {marker_count}개")
-            st_folium(
+            folium_static(
                 festival_map,
-                use_container_width=True,
+                width=1200,
                 height=620,
-                returned_objects=[],
             )
 
     with analysis_tab:

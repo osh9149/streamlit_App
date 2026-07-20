@@ -291,11 +291,14 @@ st.markdown(
 
 with st.sidebar:
     st.header("🔑 분석 설정")
-    api_key = st.text_input(
-        "YouTube Data API 키",
-        type="password",
-        help="Google Cloud Console에서 YouTube Data API v3를 활성화한 뒤 발급한 키를 입력하세요.",
-    )
+    api_key = st.secrets.get("YOUTUBE_API_KEY")
+
+    if api_key:
+        st.success("✅ API 키가 자동으로 연결되었습니다.")
+    else:
+        st.error("Secrets에 YOUTUBE_API_KEY를 등록하세요.")
+        st.stop()
+        
     video_url = st.text_input(
         "유튜브 영상 링크",
         placeholder="https://www.youtube.com/watch?v=...",

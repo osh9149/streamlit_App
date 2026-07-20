@@ -869,7 +869,7 @@ elif menu == "⚔️ 지역 인구 배틀":
         )
 
         battle_chart = px.bar(
-            comparison_long,
+            long_comparison,
             x="항목",
             y="값",
             color="지역",

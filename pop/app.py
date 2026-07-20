@@ -816,26 +816,77 @@ if menu == "🔎 인구 한눈에 보기":
 # =========================================================
 # 2. 지역 인구 배틀
 # =========================================================
+# =========================================================
+# 2. 지역 인구 배틀
+# =========================================================
 elif menu == "⚔️ 지역 인구 배틀":
     st.subheader("⚔️ 지역 인구 배틀")
     st.write("서로 다른 두 지역을 선택해 인구 특성을 비교해 보세요.")
 
+    # -----------------------------------------------------
+    # 비교할 지역 선택
+    # -----------------------------------------------------
     col_a, col_b = st.columns(2)
 
     with col_a:
-        region_a = region_selector(population, "A 지역", "battle_a")
+        region_a = region_selector(
+            population,
+            "A 지역",
+            "battle_a",
+        )
 
     with col_b:
-        region_b = region_selector(population, "B 지역", "battle_b")
+        region_b = region_selector(
+            population,
+            "B 지역",
+            "battle_b",
+        )
 
     if region_a == region_b:
         st.warning("서로 다른 두 지역을 선택해 주세요.")
+
     else:
-        row_a = get_region_row(population, region_a)
-        row_b = get_region_row(population, region_b)
+        row_a = get_region_row(
+            population,
+            region_a,
+        )
 
-        st.markdown(f"### 🟥 {region_a}  VS  🟦 {region_b}")
+        row_b = get_region_row(
+            population,
+            region_b,
+        )
 
+        if row_a is None or row_b is None:
+            st.error("선택한 지역의 인구 정보를 찾을 수 없습니다.")
+            st.stop()
+
+        # -------------------------------------------------
+        # 비교 제목
+        # -------------------------------------------------
+        st.markdown(
+            f"""
+            <h2 style="
+                margin-top: 1rem;
+                margin-bottom: 1rem;
+                font-size: 1.9rem;
+            ">
+                🟥 {region_a}
+                <span style="
+                    font-size: 1.4rem;
+                    margin: 0 0.4rem;
+                ">
+                    VS
+                </span>
+                🟦 {region_b}
+            </h2>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # -------------------------------------------------
+        # 그래프용 비교 데이터
+        # 총인구는 십만 명 단위로 변환
+        # -------------------------------------------------
         comparison = pd.DataFrame(
             {
                 "항목": [
@@ -862,29 +913,111 @@ elif menu == "⚔️ 지역 인구 배틀":
             }
         )
 
+        # 세로형 데이터를 Plotly 그래프용 긴 형태로 변환
         long_comparison = comparison.melt(
             id_vars="항목",
             var_name="지역",
             value_name="값",
         )
 
+        # 막대 위에 표시할 숫자
+        # 총인구는 소수 둘째 자리, 비율은 소수 첫째 자리
+        long_comparison["표시값"] = long_comparison.apply(
+            lambda item: (
+                f"{item['값']:.2f}"
+                if item["항목"] == "총인구(십만 명)"
+                else f"{item['값']:.1f}"
+            ),
+            axis=1,
+        )
+
+        # -------------------------------------------------
+        # 지역별 주요 지표 비교 그래프
+        # A 지역은 빨강, B 지역은 파랑
+        # -------------------------------------------------
         battle_chart = px.bar(
             long_comparison,
             x="항목",
             y="값",
             color="지역",
             barmode="group",
-            text="값",
+            text="표시값",
             title="지역별 주요 지표 비교",
-        
-            # 제목과 같은 색상
             color_discrete_map={
-                region_a: "#D94B66",   # 빨강
-                region_b: "#5A82E8",   # 파랑
+                region_a: "#C84D66",
+                region_b: "#5876D9",
+            },
+            category_orders={
+                "지역": [
+                    region_a,
+                    region_b,
+                ],
+                "항목": [
+                    "총인구(십만 명)",
+                    "유소년 비율",
+                    "생산가능인구 비율",
+                    "고령인구 비율",
+                    "여성 비율",
+                ],
             },
         )
-        st.plotly_chart(battle_chart, use_container_width=True)
 
+        # 숫자를 막대 위에 가로 방향으로 표시
+        battle_chart.update_traces(
+            textposition="outside",
+            textangle=0,
+            cliponaxis=False,
+            marker_line_color="white",
+            marker_line_width=1,
+            hovertemplate=(
+                "<b>%{fullData.name}</b><br>"
+                "%{x}<br>"
+                "값: %{y:.1f}"
+                "<extra></extra>"
+            ),
+        )
+
+        # 그래프 여백과 글자 조정
+        battle_chart.update_layout(
+            xaxis_title="항목",
+            yaxis_title="값",
+            legend_title="지역",
+            height=590,
+            bargap=0.25,
+            bargroupgap=0.08,
+            margin=dict(
+                l=40,
+                r=30,
+                t=80,
+                b=60,
+            ),
+            font=dict(
+                size=14,
+            ),
+            uniformtext_minsize=10,
+            uniformtext_mode="show",
+        )
+
+        # 막대 위 숫자가 잘리지 않도록 y축에 여유 공간 추가
+        maximum_value = long_comparison["값"].max()
+
+        battle_chart.update_yaxes(
+            range=[
+                0,
+                maximum_value * 1.18,
+            ],
+            gridcolor="#E5E9F2",
+            zerolinecolor="#C9D0DD",
+        )
+
+        st.plotly_chart(
+            battle_chart,
+            use_container_width=True,
+        )
+
+        # -------------------------------------------------
+        # 배틀 점수 계산
+        # -------------------------------------------------
         score_a = 0
         score_b = 0
         reasons_a = []
@@ -900,32 +1033,63 @@ elif menu == "⚔️ 지역 인구 배틀":
             if row_a[column] > row_b[column]:
                 score_a += 1
                 reasons_a.append(label)
+
             elif row_b[column] > row_a[column]:
                 score_b += 1
                 reasons_b.append(label)
 
-        result_cols = st.columns(3)
-        result_cols[0].metric(region_a, f"{score_a}점")
-        result_cols[1].markdown("## ⚔️")
-        result_cols[2].metric(region_b, f"{score_b}점")
+        # -------------------------------------------------
+        # 점수 결과
+        # -------------------------------------------------
+        result_cols = st.columns(
+            [1, 0.25, 1]
+        )
+
+        result_cols[0].metric(
+            region_a,
+            f"{score_a}점",
+        )
+
+        result_cols[1].markdown(
+            "<h2 style='text-align:center;'>⚔️</h2>",
+            unsafe_allow_html=True,
+        )
+
+        result_cols[2].metric(
+            region_b,
+            f"{score_b}점",
+        )
 
         if score_a > score_b:
-            st.success(f"🏆 이번 인구 배틀의 승자는 **{region_a}**입니다!")
+            st.success(
+                f"🏆 이번 인구 배틀의 승자는 "
+                f"**{region_a}**입니다!"
+            )
+
         elif score_b > score_a:
-            st.success(f"🏆 이번 인구 배틀의 승자는 **{region_b}**입니다!")
+            st.success(
+                f"🏆 이번 인구 배틀의 승자는 "
+                f"**{region_b}**입니다!"
+            )
+
         else:
             st.info("🤝 두 지역의 결과는 무승부입니다!")
 
+        # -------------------------------------------------
+        # 지역별 강점 표시
+        # -------------------------------------------------
         st.write(
-            f"- **{region_a}** 강점: "
+            f"🟥 **{region_a} 강점:** "
             f"{', '.join(reasons_a) if reasons_a else '비슷한 수준'}"
         )
+
         st.write(
-            f"- **{region_b}** 강점: "
+            f"🟦 **{region_b} 강점:** "
             f"{', '.join(reasons_b) if reasons_b else '비슷한 수준'}"
         )
+
         st.caption(
-            "고령인구 비율은 높고 낮음을 승패 점수에 반영하지 않고 "
+            "고령인구 비율은 높고 낮음을 승패 점수에 반영하지 않고, "
             "지역의 인구 특성으로만 비교했습니다."
         )
         

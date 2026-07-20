@@ -436,136 +436,153 @@ def make_quiz_question(population_data):
 # =========================================================
 # 비슷한 지역 찾기 함수
 # =========================================================
-def build_population_profiles(population, age_detail):
-    """5세 단위 연령비율 프로필 생성"""
+# =========================================================
+# 읍면동 인구 구조 분석 함수
+# =========================================================
+def build_decade_profiles(dong_population, age_detail):
+    """
+    읍면동별 10대~90대 인구 비율을 만든다.
+
+    반환 형태:
+    {
+        행정구역코드: numpy 배열
+    }
+    """
+
+    decade_labels = [
+        "10대",
+        "20대",
+        "30대",
+        "40대",
+        "50대",
+        "60대",
+        "70대",
+        "80대",
+        "90대",
+    ]
+
     profiles = {}
 
-    age_bins = list(range(0, 101, 5))
+    for _, region in dong_population.iterrows():
+        region_code = region["행정구역코드"]
 
-    for code in population["행정구역코드"]:
-        temp = age_detail[age_detail["행정구역코드"] == code].copy()
+        region_age = age_detail[
+            age_detail["행정구역코드"] == region_code
+        ].copy()
 
-        if temp.empty:
+        if region_age.empty:
             continue
 
-        temp["5세구간"] = (temp["연령"] // 5) * 5
-        temp.loc[temp["연령"] == 100, "5세구간"] = 100
-
-        grouped = (
-            temp.groupby("5세구간")[["남자", "여자"]]
-            .sum()
-            .sum(axis=1)
+        # 남자와 여자 인구를 더해 전체 연령별 인구 계산
+        region_age["전체인구"] = (
+            region_age["남자"] + region_age["여자"]
         )
 
-        grouped = grouped.reindex(age_bins, fill_value=0)
+        decade_values = []
 
-        total = grouped.sum()
+        # 10대부터 90대까지 10년 단위로 합산
+        for start_age in range(10, 100, 10):
+            end_age = start_age + 9
 
-        if total == 0:
+            decade_population = region_age.loc[
+                region_age["연령"].between(
+                    start_age,
+                    end_age,
+                ),
+                "전체인구",
+            ].sum()
+
+            decade_values.append(decade_population)
+
+        # 전체 지역 인구를 기준으로 비율 계산
+        total_population = region_age["전체인구"].sum()
+
+        if total_population <= 0:
             continue
 
-        profiles[code] = grouped / total
+        decade_ratios = (
+            np.array(decade_values, dtype=float)
+            / total_population
+            * 100
+        )
+
+        profiles[region_code] = {
+            "연령대": decade_labels,
+            "비율": decade_ratios,
+        }
 
     return profiles
 
 
-def find_similar_regions(base_code, population, profiles, top_n=5):
-    """유클리드 거리 기반 유사 지역"""
-    base = profiles[base_code]
+def find_similar_dongs(
+    selected_code,
+    dong_population,
+    profiles,
+    result_count=5,
+):
+    """
+    선택한 읍면동과 10대~90대 인구 구조가 비슷한
+    읍면동을 찾는다.
 
-    result = []
+    코사인 유사도를 이용해 0~100점으로 표시한다.
+    """
 
-    for code, profile in profiles.items():
-        if code == base_code:
+    if selected_code not in profiles:
+        return pd.DataFrame()
+
+    selected_profile = profiles[selected_code]["비율"]
+    results = []
+
+    selected_norm = np.linalg.norm(selected_profile)
+
+    if selected_norm == 0:
+        return pd.DataFrame()
+
+    for _, region in dong_population.iterrows():
+        compare_code = region["행정구역코드"]
+
+        # 선택한 지역 자체는 결과에서 제외
+        if compare_code == selected_code:
             continue
 
-        distance = np.linalg.norm(base.values - profile.values)
+        if compare_code not in profiles:
+            continue
 
-        similarity = max(0, 100 - distance * 350)
+        compare_profile = profiles[compare_code]["비율"]
+        compare_norm = np.linalg.norm(compare_profile)
 
-        region = population.loc[
-            population["행정구역코드"] == code
-        ].iloc[0]
+        if compare_norm == 0:
+            continue
 
-        result.append(
+        # 코사인 유사도
+        cosine_similarity = np.dot(
+            selected_profile,
+            compare_profile,
+        ) / (selected_norm * compare_norm)
+
+        similarity_score = cosine_similarity * 100
+
+        results.append(
             {
+                "행정구역코드": compare_code,
                 "지역명": region["지역명"],
-                "행정구역코드": code,
-                "유사도": similarity,
+                "총인구수": region["총인구수"],
+                "유사도": similarity_score,
             }
         )
 
+    if not results:
+        return pd.DataFrame()
+
     return (
-        pd.DataFrame(result)
-        .sort_values("유사도", ascending=False)
-        .head(top_n)
-    )
-
-
-def make_age_structure_chart(base_code, compare_code, age_detail, population):
-    """5세 단위 연령구조 비교"""
-
-    def make_series(code):
-        temp = age_detail[
-            age_detail["행정구역코드"] == code
-        ].copy()
-
-        temp["5세구간"] = (temp["연령"] // 5) * 5
-        temp.loc[temp["연령"] == 100, "5세구간"] = 100
-
-        grouped = (
-            temp.groupby("5세구간")[["남자", "여자"]]
-            .sum()
-            .sum(axis=1)
+        pd.DataFrame(results)
+        .sort_values(
+            "유사도",
+            ascending=False,
         )
-
-        grouped = grouped.reindex(list(range(0,101,5)), fill_value=0)
-
-        return grouped / grouped.sum() * 100
-
-    s1 = make_series(base_code)
-    s2 = make_series(compare_code)
-
-    labels = [
-        "0~4","5~9","10~14","15~19","20~24",
-        "25~29","30~34","35~39","40~44","45~49",
-        "50~54","55~59","60~64","65~69","70~74",
-        "75~79","80~84","85~89","90~94","95~99","100+"
-    ]
-
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Scatter(
-            x=labels,
-            y=s1.values,
-            mode="lines+markers",
-            name=population.loc[
-                population["행정구역코드"]==base_code,
-                "지역명"
-            ].iloc[0],
-        )
+        .head(result_count)
+        .reset_index(drop=True)
     )
-
-    fig.add_trace(
-        go.Scatter(
-            x=labels,
-            y=s2.values,
-            mode="lines+markers",
-            name=population.loc[
-                population["행정구역코드"]==compare_code,
-                "지역명"
-            ].iloc[0],
-        )
-    )
-
-    fig.update_layout(
-        title="5세 단위 연령구조 비교",
-        yaxis_title="비율(%)",
-        xaxis_title=""
-    )
-
-    return fig
     
 # =========================================================
 # 파일 불러오기
@@ -879,104 +896,342 @@ elif menu == "⚔️ 지역 인구 배틀":
 # 3. 비슷한 지역 찾기
 # =========================================================
 elif menu == "🧩 비슷한 지역 찾기":
+    st.subheader("🧩 비슷한 읍면동 찾기")
 
-    st.subheader("🧩 비슷한 지역 찾기")
-
-    region = region_selector(
-        population,
-        "기준 지역",
-        "similar"
+    st.write(
+        "시도, 시군구, 읍면동을 선택하면 "
+        "10대부터 90대까지의 인구 구조가 비슷한 "
+        "전국의 읍면동 5곳을 찾아줍니다."
     )
 
-    row = get_region_row(population, region)
+    # -----------------------------------------------------
+    # 읍면동과 시군구 데이터 준비
+    # -----------------------------------------------------
+    dong_population = population_all[
+        population_all["지역단계"] == "읍면동"
+    ].copy()
 
-    profiles = build_population_profiles(
-        population,
-        age_detail
+    sigungu_population = population_all[
+        population_all["지역단계"] == "시군구"
+    ].copy()
+
+    if dong_population.empty:
+        st.warning(
+            "현재 CSV 파일에 읍면동 데이터가 없습니다."
+        )
+        st.stop()
+
+    # 읍면동 코드의 앞 5자리는 상위 시군구 코드와 동일
+    dong_population["상위시군구코드"] = (
+        dong_population["행정구역코드"].str[:5]
+        + "00000"
     )
 
-    code = row["행정구역코드"]
-
-    same_sido = st.checkbox(
-        "같은 시도 안에서만 찾기",
-        value=False
+    # 시군구 코드와 시군구 이름 연결
+    sigungu_name_map = dict(
+        zip(
+            sigungu_population["행정구역코드"],
+            sigungu_population["지역명"],
+        )
     )
 
-    top_n = st.slider(
-        "추천 개수",
-        3,
-        10,
-        5
+    dong_population["상위시군구명"] = (
+        dong_population["상위시군구코드"]
+        .map(sigungu_name_map)
+        .fillna("")
     )
 
-    similar = find_similar_regions(
-        code,
-        population,
-        profiles,
-        top_n=20
+    # 상위 시군구 정보를 찾지 못한 행 제외
+    dong_population = dong_population[
+        dong_population["상위시군구명"] != ""
+    ].copy()
+
+    if dong_population.empty:
+        st.warning(
+            "읍면동의 상위 시군구 정보를 만들 수 없습니다."
+        )
+        st.stop()
+
+    # -----------------------------------------------------
+    # 시도 선택
+    # -----------------------------------------------------
+    sido_list = sorted(
+        dong_population["시도"]
+        .dropna()
+        .unique()
+        .tolist()
     )
 
-    if same_sido:
-        similar = similar.merge(
-            population[
-                ["행정구역코드","시도"]
-            ],
-            on="행정구역코드"
+    selected_sido = st.selectbox(
+        "① 시도를 선택하세요.",
+        sido_list,
+        key="similar_dong_sido",
+    )
+
+    sido_dong_data = dong_population[
+        dong_population["시도"] == selected_sido
+    ].copy()
+
+    # -----------------------------------------------------
+    # 시군구 선택
+    # -----------------------------------------------------
+    sigungu_list = sorted(
+        sido_dong_data["상위시군구명"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    selected_sigungu = st.selectbox(
+        "② 시군구를 선택하세요.",
+        sigungu_list,
+        format_func=lambda name: (
+            name.replace(selected_sido, "", 1).strip()
+        ),
+        key="similar_dong_sigungu",
+    )
+
+    sigungu_dong_data = sido_dong_data[
+        sido_dong_data["상위시군구명"]
+        == selected_sigungu
+    ].copy()
+
+    # -----------------------------------------------------
+    # 읍면동 선택
+    # -----------------------------------------------------
+    dong_list = sorted(
+        sigungu_dong_data["지역명"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    selected_dong = st.selectbox(
+        "③ 읍면동을 선택하세요.",
+        dong_list,
+        format_func=lambda name: (
+            name.replace(selected_sigungu, "", 1).strip()
+        ),
+        key="similar_dong_name",
+    )
+
+    selected_row = get_region_row(
+        dong_population,
+        selected_dong,
+    )
+
+    if selected_row is None:
+        st.error("선택한 읍면동의 정보를 찾을 수 없습니다.")
+        st.stop()
+
+    selected_code = selected_row["행정구역코드"]
+
+    # -----------------------------------------------------
+    # 비슷한 동 찾기
+    # -----------------------------------------------------
+    if st.button(
+        "🧩 비슷한 동 찾기",
+        use_container_width=True,
+    ):
+        with st.spinner(
+            "🔍 전국 읍면동의 연령별 인구 구조를 비교하고 있습니다..."
+        ):
+            decade_profiles = build_decade_profiles(
+                dong_population,
+                age_detail,
+            )
+
+            similar_dongs = find_similar_dongs(
+                selected_code,
+                dong_population,
+                decade_profiles,
+                result_count=5,
+            )
+
+        if similar_dongs.empty:
+            st.warning(
+                "선택한 지역과 비교할 수 있는 "
+                "읍면동 데이터를 찾지 못했습니다."
+            )
+            st.stop()
+
+        # Streamlit 재실행에도 결과 유지
+        st.session_state["similar_dong_result"] = (
+            similar_dongs
+        )
+        st.session_state["similar_dong_profiles"] = (
+            decade_profiles
+        )
+        st.session_state["similar_selected_code"] = (
+            selected_code
+        )
+        st.session_state["similar_selected_name"] = (
+            selected_dong
         )
 
-        similar = similar[
-            similar["시도"] == row["시도"]
-        ].head(top_n)
+    # -----------------------------------------------------
+    # 결과 출력
+    # -----------------------------------------------------
+    if "similar_dong_result" in st.session_state:
+        similar_dongs = st.session_state[
+            "similar_dong_result"
+        ]
 
-    else:
-        similar = similar.head(top_n)
+        decade_profiles = st.session_state[
+            "similar_dong_profiles"
+        ]
 
-    st.success(
-        f"'{region}'와 가장 비슷한 지역입니다."
-    )
+        result_selected_code = st.session_state[
+            "similar_selected_code"
+        ]
 
-    st.dataframe(
-        similar[["지역명","유사도"]],
-        hide_index=True,
-        use_container_width=True
-    )
+        result_selected_name = st.session_state[
+            "similar_selected_name"
+        ]
 
-    fig = px.bar(
-        similar,
-        x="유사도",
-        y="지역명",
-        orientation="h",
-        text="유사도",
-        title="유사도 순위"
-    )
+        # 선택한 지역이 바뀌면 이전 결과 안내
+        if result_selected_code != selected_code:
+            st.info(
+                "지역 선택이 변경되었습니다. "
+                "‘비슷한 동 찾기’ 버튼을 다시 눌러주세요."
+            )
 
-    fig.update_traces(texttemplate="%.1f점")
+        else:
+            st.success(
+                f"**{result_selected_name}**과 "
+                "10대~90대 인구 구조가 비슷한 "
+                "읍면동 5곳입니다."
+            )
 
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
+            # ---------------------------------------------
+            # 결과 표
+            # ---------------------------------------------
+            result_table = similar_dongs.copy()
+            result_table["순위"] = range(
+                1,
+                len(result_table) + 1,
+            )
 
-    compare_region = st.selectbox(
-        "연령구조 비교",
-        similar["지역명"]
-    )
+            result_table["유사도"] = result_table[
+                "유사도"
+            ].apply(
+                lambda value: f"{value:.2f}점"
+            )
 
-    compare_code = population.loc[
-        population["지역명"] == compare_region,
-        "행정구역코드"
-    ].iloc[0]
+            result_table["총인구수"] = result_table[
+                "총인구수"
+            ].apply(
+                lambda value: f"{int(value):,}명"
+            )
 
-    st.plotly_chart(
-        make_age_structure_chart(
-            code,
-            compare_code,
-            age_detail,
-            population,
-        ),
-        use_container_width=True,
-    )
+            result_table = result_table[
+                [
+                    "순위",
+                    "지역명",
+                    "총인구수",
+                    "유사도",
+                ]
+            ]
 
+            st.dataframe(
+                result_table,
+                hide_index=True,
+                use_container_width=True,
+            )
+
+            # ---------------------------------------------
+            # 10대~90대 인구 구조 꺾은선 그래프
+            # ---------------------------------------------
+            st.markdown(
+                "### 📈 10대~90대 인구 구조 비교"
+            )
+
+            line_figure = go.Figure()
+
+            # 선택한 읍면동
+            selected_profile = decade_profiles[
+                result_selected_code
+            ]
+
+            line_figure.add_trace(
+                go.Scatter(
+                    x=selected_profile["연령대"],
+                    y=selected_profile["비율"],
+                    mode="lines+markers",
+                    name=f"기준 · {result_selected_name}",
+                    line=dict(width=5),
+                    marker=dict(size=9),
+                    hovertemplate=(
+                        "<b>%{x}</b><br>"
+                        "인구 비율: %{y:.2f}%"
+                        "<extra></extra>"
+                    ),
+                )
+            )
+
+            # 비슷한 읍면동 5개
+            for _, similar_row in (
+                similar_dongs.iterrows()
+            ):
+                similar_code = similar_row[
+                    "행정구역코드"
+                ]
+                similar_name = similar_row["지역명"]
+
+                if similar_code not in decade_profiles:
+                    continue
+
+                similar_profile = decade_profiles[
+                    similar_code
+                ]
+
+                line_figure.add_trace(
+                    go.Scatter(
+                        x=similar_profile["연령대"],
+                        y=similar_profile["비율"],
+                        mode="lines+markers",
+                        name=similar_name,
+                        hovertemplate=(
+                            "<b>%{x}</b><br>"
+                            "인구 비율: %{y:.2f}%"
+                            "<extra></extra>"
+                        ),
+                    )
+                )
+
+            line_figure.update_layout(
+                title=(
+                    f"{result_selected_name}과 "
+                    "비슷한 읍면동의 연령별 인구 구조"
+                ),
+                xaxis_title="연령대",
+                yaxis_title="전체 인구 중 비율(%)",
+                hovermode="x unified",
+                height=620,
+                legend_title="지역",
+                margin=dict(
+                    l=40,
+                    r=30,
+                    t=80,
+                    b=50,
+                ),
+            )
+
+            line_figure.update_yaxes(
+                ticksuffix="%",
+                rangemode="tozero",
+            )
+
+            st.plotly_chart(
+                line_figure,
+                use_container_width=True,
+            )
+
+            st.caption(
+                "유사도는 각 읍면동의 전체 인구 중 "
+                "10대부터 90대까지 연령대별 인구 비율을 "
+                "비교하여 계산한 값입니다."
+            )
     
 # =========================================================
 # 4. 나에게 맞는 지역 찾기

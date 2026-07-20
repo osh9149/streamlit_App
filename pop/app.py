@@ -49,14 +49,27 @@ st.markdown(
         font-size: 1.05rem;
     }
 
-    .fun-card {
-        padding: 1.1rem;
-        border-radius: 20px;
-        background: white;
-        border: 1px solid #edf0f5;
-        box-shadow: 0 6px 16px rgba(60, 70, 100, 0.08);
-        margin-bottom: 0.8rem;
-    }
+.fun-card {
+    padding: 0.75rem;
+    border-radius: 14px;
+    background: white;
+    border: 1px solid #edf0f5;
+    box-shadow: 0 4px 10px rgba(60, 70, 100, 0.06);
+    margin-bottom: 0.55rem;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.fun-card h3 {
+    font-size: 1.05rem;
+    margin-top: 0;
+    margin-bottom: 0.35rem;
+}
+
+.fun-card p {
+    font-size: 0.85rem;
+    margin: 0.2rem 0;
+}
 
     .rank-first {
         padding: 1rem;

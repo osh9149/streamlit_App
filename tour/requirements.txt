@@ -1,6 +1,6 @@
-streamlit
-requests
-pandas
 plotly
 folium
 streamlit-folium==0.27.2
+streamlit>=1.40,<2.0
+pandas>=2.0,<3.0
+requests>=2.31,<3.0

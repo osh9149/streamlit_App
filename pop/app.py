@@ -867,14 +867,21 @@ elif menu == "⚔️ 지역 인구 배틀":
             var_name="지역",
             value_name="값",
         )
+
         battle_chart = px.bar(
-            long_comparison,
+            comparison_long,
             x="항목",
             y="값",
             color="지역",
             barmode="group",
-            text_auto=".1f",
+            text="값",
             title="지역별 주요 지표 비교",
+        
+            # 제목과 같은 색상
+            color_discrete_map={
+                region_a: "#D94B66",   # 빨강
+                region_b: "#5A82E8",   # 파랑
+            },
         )
         st.plotly_chart(battle_chart, use_container_width=True)
 

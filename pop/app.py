@@ -8,7 +8,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-DEFAULT_CSV = "pop/202606_202606_연령별인구현황_월간(5).csv"
 
 # =========================================================
 # 기본 설정
@@ -19,28 +18,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# ==========================================================
-# 기본 데이터(GitHub 저장소) 불러오기
-# ==========================================================
-
-default_path = Path(DEFAULT_CSV)
-
-if not default_path.exists():
-    st.error(
-        f"기본 데이터 파일 '{DEFAULT_CSV}'을 찾을 수 없습니다.\n\n"
-        "app.py와 같은 폴더에 업로드해 주세요."
-    )
-    st.stop()
-
-try:
-    raw_data = read_population_csv(default_path)
-    source_name = DEFAULT_CSV
-
-    population_all, age_detail = prepare_population_data(raw_data)
-
-except Exception as e:
-    st.error(f"기본 데이터를 읽을 수 없습니다.\n\n{e}")
-    st.stop()
+DEFAULT_CSV = "202606_202606_연령별인구현황_월간.csv"
 
 
 # =========================================================
@@ -469,47 +447,34 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ==========================================================
-# 데이터 불러오기
-# GitHub 기본 파일 → 없으면 업로드
-# ==========================================================
-
-default_path = Path(DEFAULT_CSV)
+with st.sidebar:
+    st.header("📂 데이터 설정")
+    uploaded_file = st.file_uploader(
+        "행정안전부 연령별 인구 CSV",
+        type=["csv"],
+        help="첨부 파일과 같은 연령별 인구현황 월간 CSV를 사용합니다.",
+    )
 
 try:
-    # GitHub에 기본 파일이 있으면 자동 사용
-    if default_path.exists():
+    if uploaded_file is not None:
+        raw_data = read_population_csv(uploaded_file)
+        source_name = uploaded_file.name
+    else:
+        default_path = Path(DEFAULT_CSV)
+        if not default_path.exists():
+            st.warning(
+                f"기본 파일 `{DEFAULT_CSV}`을 찾을 수 없습니다. "
+                "사이드바에서 CSV 파일을 업로드해 주세요."
+            )
+            st.stop()
+
         raw_data = read_population_csv(default_path)
         source_name = DEFAULT_CSV
 
-        with st.sidebar:
-            st.header("📂 데이터 설정")
-            st.success("✅ GitHub 기본 데이터를 사용합니다.")
-            st.caption(DEFAULT_CSV)
-
-    # 기본 파일이 없으면 업로드 창 표시
-    else:
-        with st.sidebar:
-            st.header("📂 데이터 설정")
-            st.warning("기본 데이터를 찾을 수 없습니다.")
-            uploaded_file = st.file_uploader(
-                "행정안전부 연령별 인구 CSV",
-                type=["csv"],
-                help="기본 파일이 없을 경우에만 업로드합니다.",
-            )
-
-        if uploaded_file is None:
-            st.info("CSV 파일을 업로드해 주세요.")
-            st.stop()
-
-        raw_data = read_population_csv(uploaded_file)
-        source_name = uploaded_file.name
-
-    # 데이터 전처리
     population_all, age_detail = prepare_population_data(raw_data)
 
 except Exception as error:
-    st.error(f"데이터를 불러오는 중 문제가 발생했습니다.\n\n{error}")
+    st.error(f"데이터를 불러오는 중 문제가 발생했습니다: {error}")
     st.stop()
 
 

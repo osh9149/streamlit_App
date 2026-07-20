@@ -589,22 +589,29 @@ with st.sidebar:
     )
 
 try:
-    if uploaded_file is not None:
-        raw_data = read_population_csv(uploaded_file)
-        source_name = uploaded_file.name
-    else:
-        # app.py가 있는 폴더
-        APP_DIR = Path(__file__).resolve().parent
-        
-        # app.py와 같은 폴더의 CSV
-        default_path = APP_DIR / DEFAULT_CSV
-        
-        if not default_path.exists():
-            st.warning(
-                f"기본 파일 `{DEFAULT_CSV}`을 찾을 수 없습니다.\n"
-                f"찾는 위치: {default_path}"
-            )
-            st.stop()
+    with st.spinner("📂 인구 데이터를 불러오는 중입니다... 잠시만 기다려 주세요."):
+        if uploaded_file is not None:
+            raw_data = read_population_csv(uploaded_file)
+            source_name = uploaded_file.name
+        else:
+            default_path = Path(DEFAULT_CSV)
+
+            if not default_path.exists():
+                st.warning(
+                    f"기본 파일 `{DEFAULT_CSV}`을 찾을 수 없습니다."
+                )
+                st.stop()
+
+            raw_data = read_population_csv(default_path)
+            source_name = DEFAULT_CSV
+
+        population_all, age_detail = prepare_population_data(raw_data)
+
+    st.success("✅ 인구 데이터 로딩이 완료되었습니다.")
+
+except Exception as error:
+    st.error(f"데이터를 불러오는 중 문제가 발생했습니다.\n\n{error}")
+    st.stop()
 
         raw_data = read_population_csv(default_path)
         source_name = DEFAULT_CSV

@@ -203,7 +203,12 @@ def find_age_column(columns, gender, age):
 def prepare_population_data(raw_df):
     """업로드된 행정안전부 연령별 인구 CSV를 앱 분석용 데이터로 변환한다."""
     df = raw_df.copy()
-    df.columns = [str(column).strip() for column in df.columns]
+
+    # 열 이름 앞뒤 공백과 줄바꿈 제거
+    df.columns = [
+        re.sub(r"\s+", " ", str(column)).strip()
+        for column in df.columns
+    ]
 
     if "행정구역" not in df.columns:
         raise ValueError("CSV 파일에 '행정구역' 열이 없습니다.")
@@ -213,7 +218,6 @@ def prepare_population_data(raw_df):
     df["행정구역코드"] = parsed.str[1]
 
     # 10자리 코드의 끝자리로 행정계층 구분
-    # 시도: 1100000000, 시군구: 1111000000, 읍면동: 1111051500
     df["지역단계"] = np.select(
         [
             df["행정구역코드"].str.endswith("00000000"),
@@ -223,9 +227,17 @@ def prepare_population_data(raw_df):
         default="읍면동",
     )
 
-    # 해당 파일은 2026년06월처럼 기준월이 열 이름에 들어 있다.
-    month_match = re.search(r"(\d{4}년\d{2}월)", " ".join(df.columns))
-    base_month = month_match.group(1) if month_match else "기준월 미상"
+    # 기준월 찾기
+    month_match = re.search(
+        r"(\d{4}년\s*\d{2}월)",
+        " ".join(df.columns),
+    )
+
+    base_month = (
+        re.sub(r"\s+", "", month_match.group(1))
+        if month_match
+        else "기준월 미상"
+    )
 
     total_col = find_column(df.columns, "_계_총인구수")
     male_col = find_column(df.columns, "_남_총인구수")
@@ -233,7 +245,8 @@ def prepare_population_data(raw_df):
 
     if not all([total_col, male_col, female_col]):
         raise ValueError(
-            "'계_총인구수', '남_총인구수', '여_총인구수' 열을 찾지 못했습니다."
+            "'계_총인구수', '남_총인구수', "
+            "'여_총인구수' 열을 찾지 못했습니다."
         )
 
     result = pd.DataFrame(
@@ -248,53 +261,138 @@ def prepare_population_data(raw_df):
         }
     )
 
-    # 0~14세, 15~64세, 65세 이상 인구 합산
+    # -----------------------------------------------------
+    # 연령별 인구 읽기
+    # -----------------------------------------------------
     age_values = {}
 
     for gender in ["계", "남", "여"]:
         gender_age_columns = []
 
         for age in range(101):
-            column = find_age_column(df.columns, gender, age)
+            column = find_age_column(
+                df.columns,
+                gender,
+                age,
+            )
+
             if column:
                 values = clean_number(df[column])
             else:
-                values = pd.Series(0, index=df.index, dtype=float)
+                values = pd.Series(
+                    0,
+                    index=df.index,
+                    dtype=float,
+                )
 
             age_values[(gender, age)] = values
             gender_age_columns.append(values)
 
-        # 필요 시 전체 연령 합계를 재검증할 수 있는 값
-        age_values[(gender, "합계")] = sum(gender_age_columns)
+        # 성별 전체 연령 인구 합계
+        age_values[(gender, "합계")] = pd.concat(
+            gender_age_columns,
+            axis=1,
+        ).sum(axis=1)
 
-    result["유소년인구"] = sum(age_values[("계", age)] for age in range(0, 15))
-    result["생산가능인구"] = sum(age_values[("계", age)] for age in range(15, 65))
-    result["고령인구"] = sum(age_values[("계", age)] for age in range(65, 101))
+    # -----------------------------------------------------
+    # 연령 계층별 인구 계산
+    # 반드시 gender 반복문 밖에 있어야 함
+    # -----------------------------------------------------
+    result["유소년인구"] = pd.concat(
+        [
+            age_values[("계", age)]
+            for age in range(0, 15)
+        ],
+        axis=1,
+    ).sum(axis=1)
 
-    # 인구 피라미드용 연령 데이터도 보존
+    result["생산가능인구"] = pd.concat(
+        [
+            age_values[("계", age)]
+            for age in range(15, 65)
+        ],
+        axis=1,
+    ).sum(axis=1)
+
+    result["고령인구"] = pd.concat(
+        [
+            age_values[("계", age)]
+            for age in range(65, 101)
+        ],
+        axis=1,
+    ).sum(axis=1)
+
+    # -----------------------------------------------------
+    # 인구 피라미드용 연령 데이터
+    # -----------------------------------------------------
     age_rows = []
+
     for idx in df.index:
         for age in range(101):
             age_rows.append(
                 {
-                    "행정구역코드": result.loc[idx, "행정구역코드"],
-                    "지역명": result.loc[idx, "지역명"],
+                    "행정구역코드": result.loc[
+                        idx,
+                        "행정구역코드",
+                    ],
+                    "지역명": result.loc[
+                        idx,
+                        "지역명",
+                    ],
                     "연령": age,
-                    "연령표시": "100세 이상" if age == 100 else f"{age}세",
-                    "남자": int(age_values[("남", age)].loc[idx]),
-                    "여자": int(age_values[("여", age)].loc[idx]),
+                    "연령표시": (
+                        "100세 이상"
+                        if age == 100
+                        else f"{age}세"
+                    ),
+                    "남자": int(
+                        age_values[("남", age)].loc[idx]
+                    ),
+                    "여자": int(
+                        age_values[("여", age)].loc[idx]
+                    ),
                 }
             )
 
     age_df = pd.DataFrame(age_rows)
 
+    # -----------------------------------------------------
     # 비율 계산
-    denominator = result["총인구수"].replace(0, np.nan)
-    result["남자비율"] = result["남자인구수"] / denominator * 100
-    result["여자비율"] = result["여자인구수"] / denominator * 100
-    result["유소년비율"] = result["유소년인구"] / denominator * 100
-    result["생산가능비율"] = result["생산가능인구"] / denominator * 100
-    result["고령인구비율"] = result["고령인구"] / denominator * 100
+    # -----------------------------------------------------
+    denominator = result["총인구수"].replace(
+        0,
+        np.nan,
+    )
+
+    result["남자비율"] = (
+        result["남자인구수"]
+        / denominator
+        * 100
+    )
+
+    result["여자비율"] = (
+        result["여자인구수"]
+        / denominator
+        * 100
+    )
+
+    result["유소년비율"] = (
+        result["유소년인구"]
+        / denominator
+        * 100
+    )
+
+    result["생산가능비율"] = (
+        result["생산가능인구"]
+        / denominator
+        * 100
+    )
+
+    result["고령인구비율"] = (
+        result["고령인구"]
+        / denominator
+        * 100
+    )
 
     ratio_columns = [
         "남자비율",
@@ -303,31 +401,59 @@ def prepare_population_data(raw_df):
         "생산가능비율",
         "고령인구비율",
     ]
-    result[ratio_columns] = result[ratio_columns].fillna(0)
 
+    result[ratio_columns] = (
+        result[ratio_columns]
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
+
+    # -----------------------------------------------------
     # 시도와 시군구 이름 분리
-    sido_rows = result[result["지역단계"] == "시도"].copy()
-    sido_names = sorted(sido_rows["지역명"].unique())
+    # -----------------------------------------------------
+    sido_rows = result[
+        result["지역단계"] == "시도"
+    ].copy()
+
+    sido_names = sorted(
+        sido_rows["지역명"].unique()
+    )
 
     def get_sido_name(region_name):
         matched = [
             sido
             for sido in sido_names
-            if region_name == sido or region_name.startswith(sido + " ")
+            if (
+                region_name == sido
+                or region_name.startswith(sido + " ")
+            )
         ]
-        return max(matched, key=len) if matched else region_name.split()[0]
 
-    result["시도"] = result["지역명"].apply(get_sido_name)
+        return (
+            max(matched, key=len)
+            if matched
+            else region_name.split()[0]
+        )
+
+    result["시도"] = result[
+        "지역명"
+    ].apply(get_sido_name)
+
     result["시군구"] = result.apply(
         lambda row: (
-            row["지역명"].replace(row["시도"], "", 1).strip()
+            row["지역명"]
+            .replace(row["시도"], "", 1)
+            .strip()
             if row["지역단계"] == "시군구"
             else row["지역명"]
         ),
         axis=1,
     )
 
-    result = result[result["총인구수"] > 0].reset_index(drop=True)
+    result = result[
+        result["총인구수"] > 0
+    ].reset_index(drop=True)
+
     return result, age_df
 
 

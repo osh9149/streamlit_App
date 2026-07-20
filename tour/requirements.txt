@@ -3,4 +3,4 @@ requests
 pandas
 plotly
 folium
-streamlit-folium
+streamlit-folium==0.27.2

@@ -447,30 +447,45 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.sidebar:
-    st.header("📂 데이터 설정")
-    uploaded_file = st.file_uploader(
-        "행정안전부 연령별 인구 CSV",
-        type=["csv"],
-        help="첨부 파일과 같은 연령별 인구현황 월간 CSV를 사용합니다.",
-    )
+# =========================================================
+# 데이터 파일 불러오기
+# =========================================================
+default_path = Path(DEFAULT_CSV)
 
 try:
-    if uploaded_file is not None:
-        raw_data = read_population_csv(uploaded_file)
-        source_name = uploaded_file.name
+    # GitHub 저장소에 기본 CSV가 있으면 자동 사용
+    if default_path.exists():
+        raw_data = read_population_csv(default_path)
+        source_name = DEFAULT_CSV
+
+        with st.sidebar:
+            st.header("📂 데이터 설정")
+            st.success("✅ GitHub의 기본 데이터를 사용합니다.")
+            st.caption(DEFAULT_CSV)
+
+    # 기본 CSV가 없을 때만 업로드 기능 표시
     else:
-        default_path = Path(DEFAULT_CSV)
-        if not default_path.exists():
-            st.warning(
-                f"기본 파일 `{DEFAULT_CSV}`을 찾을 수 없습니다. "
+        with st.sidebar:
+            st.header("📂 데이터 설정")
+            st.warning("GitHub 저장소에서 기본 CSV를 찾지 못했습니다.")
+
+            uploaded_file = st.file_uploader(
+                "행정안전부 연령별 인구 CSV",
+                type=["csv"],
+                help="연령별 인구현황 월간 CSV 파일을 업로드해 주세요.",
+            )
+
+        if uploaded_file is None:
+            st.info(
+                f"GitHub 저장소에 `{DEFAULT_CSV}` 파일을 올리거나 "
                 "사이드바에서 CSV 파일을 업로드해 주세요."
             )
             st.stop()
 
-        raw_data = read_population_csv(default_path)
-        source_name = DEFAULT_CSV
+        raw_data = read_population_csv(uploaded_file)
+        source_name = uploaded_file.name
 
+    # 데이터 전처리
     population_all, age_detail = prepare_population_data(raw_data)
 
 except Exception as error:

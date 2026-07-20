@@ -182,15 +182,22 @@ st.markdown(
         }
 
         .no-image {
-            height: 240px;
+            width: 100%;
+            height: 250px;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            border-radius: 16px;
-            background: linear-gradient(135deg, #FFE7F2, #FFF7CC, #E8F7FF);
-            color: #444;
             text-align: center;
+            border-radius: 16px;
+            background: linear-gradient(
+                135deg,
+                #fff0e8,
+                #fff8d8,
+                #eaf8ff
+            );
+            overflow: hidden;
         }
 
         /* 랜덤 추천 */
@@ -506,25 +513,31 @@ def festival_card_html(row):
 
     if image_url:
         safe_image_url = html.escape(image_url, quote=True)
+
         image_section = (
-            f'<img class="festival-image" src="{safe_image_url}" '
-            f'alt="{title}" loading="lazy">'
+            f'<img class="festival-image" '
+            f'src="{safe_image_url}" '
+            f'alt="{title}" '
+            f'loading="lazy">'
         )
     else:
-        image_section = """
-        <div class="no-image">
-            <div style="font-size:70px;">🎆</div>
-            <div style="font-size:42px; margin-top:8px;">
-                🎪 🎈 🎊
-            </div>
-            <div style="font-size:20px; font-weight:bold; margin-top:14px; color:#E6517A;">
-                축제 이미지 준비중
-            </div>
-            <div style="font-size:15px; color:#666; margin-top:8px;">
-                즐거운 축제를 만나보세요 😊
-            </div>
-        </div>
-        """
+        image_section = (
+            '<div class="no-image">'
+            '<div class="festival-main-icon">🎆</div>'
+            '<div class="festival-small-icons">🎪 🎈 🎊</div>'
+            '<div class="no-image-title">축제 이미지 준비중</div>'
+            '<div class="no-image-text">즐거운 축제를 만나보세요 😊</div>'
+            '</div>'
+        )
+
+    return (
+        '<div class="festival-card">'
+        f'{image_section}'
+        f'<h3>🎪 {title}</h3>'
+        f'<p><strong>📅 기간</strong><br>{period}</p>'
+        f'<p><strong>📍 주소</strong><br>{address}</p>'
+        '</div>'
+    )
 
     return f"""
         <div class="festival-card">

@@ -1,5 +1,7 @@
-import io
 from pathlib import Path
+from datetime import date, datetime
+import io
+import re
 
 import numpy as np
 import pandas as pd
@@ -7,444 +9,475 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-st.set_page_config(page_title="기온으로 떠나는 시간여행", page_icon="🌡️", layout="wide")
-DEFAULT_FILE = "전국기온데이터(1973-2026).csv"
+# =========================================================
+# 기본 설정
+# =========================================================
+st.set_page_config(
+    page_title="기온으로 떠나는 시간여행",
+    page_icon="🌡️",
+    layout="wide",
+)
 
-st.markdown("""
-<style>
-.stApp {background: linear-gradient(180deg,#f6fbff 0%,#fffaf4 100%);}
-.title {text-align:center;font-size:2.5rem;font-weight:800;color:#17324d;}
-.subtitle {text-align:center;color:#607284;margin-bottom:1.3rem;}
-.card {padding:1.1rem 1.2rem;border-radius:16px;background:white;
-border:1px solid #e3ebf3;box-shadow:0 4px 15px rgba(30,60,90,.07);margin:.7rem 0;}
-.history {padding:1.2rem;border-radius:16px;background:#fff9eb;
-border-left:6px solid #f0a500;margin:.7rem 0 1rem;}
-div[data-testid="stMetric"] {background:white;border:1px solid #e3ebf3;
-padding:12px;border-radius:14px;}
-</style>
-""", unsafe_allow_html=True)
+# 같은 폴더에서 우선적으로 찾을 기본 파일명
+PREFERRED_FILES = [
+    "전국기온데이터(1973-2026)(1).csv",
+    "전국기온데이터(1973-2026).csv",
+    "전국기온데이터.csv",
+]
+
+# 역사 속 날씨 메뉴에 표시할 예시 사건
+HISTORICAL_EVENTS = {
+    "대한민국 제10대 대통령 취임": "1979-12-06",
+    "서울 올림픽 개막": "1988-09-17",
+    "대전 엑스포 개막": "1993-08-07",
+    "2002 한일 월드컵 개막": "2002-05-31",
+    "대한민국 월드컵 4강전": "2002-06-25",
+    "서울 G20 정상회의 개막": "2010-11-11",
+    "평창 동계올림픽 개막": "2018-02-09",
+    "누리호 3차 발사 성공": "2023-05-25",
+}
+
+# =========================================================
+# 화면 디자인
+# =========================================================
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background: linear-gradient(180deg, #fff9f0 0%, #f2f8ff 48%, #ffffff 100%);
+    }
+    .hero {
+        padding: 2rem 2.2rem;
+        border-radius: 24px;
+        background: linear-gradient(135deg, #ff7a59 0%, #ffb347 48%, #4facfe 100%);
+        color: white;
+        box-shadow: 0 12px 30px rgba(45, 92, 150, 0.18);
+        margin-bottom: 1.2rem;
+    }
+    .hero h1 { margin: 0; font-size: 2.5rem; }
+    .hero p { margin: .7rem 0 0; font-size: 1.08rem; }
+    .info-card {
+        padding: 1.15rem 1.25rem;
+        border-radius: 18px;
+        background: rgba(255,255,255,.92);
+        border: 1px solid rgba(65,105,225,.12);
+        box-shadow: 0 7px 20px rgba(30, 70, 120, .08);
+        min-height: 135px;
+    }
+    .big-number {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-top: .3rem;
+    }
+    .warm { color: #ef553b; }
+    .cool { color: #2f80ed; }
+    .small-note { color: #5c677d; font-size: .9rem; }
+    div[data-testid="stMetric"] {
+        background: rgba(255,255,255,.9);
+        border: 1px solid rgba(70,100,160,.12);
+        padding: 14px;
+        border-radius: 16px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <div class="hero">
+        <h1>🌡️ 기온으로 떠나는 시간여행</h1>
+        <p>1973년부터 이어진 전국 기온 기록 속에서 나의 생일, 특별한 날짜, 역사적인 순간의 날씨를 만나보세요.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# =========================================================
+# 데이터 불러오기
+# =========================================================
+def find_default_csv() -> Path | None:
+    """app.py와 같은 폴더에서 기온 CSV를 자동으로 찾는다."""
+    base_dir = Path(__file__).resolve().parent
+
+    for filename in PREFERRED_FILES:
+        candidate = base_dir / filename
+        if candidate.exists():
+            return candidate
+
+    # 파일명이 조금 달라도 '기온'이 들어간 CSV를 우선 선택
+    csv_files = list(base_dir.glob("*.csv"))
+    temp_files = [p for p in csv_files if "기온" in p.name]
+    if temp_files:
+        return sorted(temp_files)[0]
+    if csv_files:
+        return sorted(csv_files)[0]
+    return None
 
 
-# -------------------- 데이터 불러오기 --------------------
-def read_csv_file(source):
-    raw = source.getvalue() if hasattr(source, "getvalue") else Path(source).read_bytes()
-    last_error = None
-
-    for encoding in ["cp949", "euc-kr", "utf-8-sig", "utf-8"]:
+def decode_uploaded_file(raw: bytes) -> str:
+    """한글 CSV에서 자주 쓰는 인코딩을 순서대로 시도한다."""
+    for encoding in ("cp949", "euc-kr", "utf-8-sig", "utf-8"):
         try:
-            text = raw.decode(encoding)
-            lines = text.splitlines()
-            header_index = 0
-
-            for i, line in enumerate(lines):
-                clean = line.strip().replace("\t", "")
-                if clean.startswith("날짜,") and "평균기온" in clean:
-                    header_index = i
-                    break
-
-            table_text = "\n".join(lines[header_index:])
-            df = pd.read_csv(io.StringIO(table_text))
-            df.columns = [str(c).strip() for c in df.columns]
-            df["날짜"] = df["날짜"].astype(str).str.strip()
-            return df
-        except Exception as e:
-            last_error = e
-
-    raise ValueError(f"CSV 파일을 읽지 못했습니다: {last_error}")
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("CSV 파일의 문자 인코딩을 확인할 수 없습니다.")
 
 
-@st.cache_data
-def load_default(path):
-    return read_csv_file(path)
+def detect_header_line(text: str) -> int:
+    """'날짜'와 기온 열이 있는 실제 CSV 머리글 행을 자동으로 찾는다."""
+    for index, line in enumerate(text.splitlines()):
+        cleaned = line.strip().lstrip("\ufeff")
+        if "날짜" in cleaned and "평균기온" in cleaned and "," in cleaned:
+            return index
+    return 0
 
 
-def clean_data(df):
-    rename = {}
+@st.cache_data(show_spinner=False)
+def load_temperature_data_from_text(text: str) -> pd.DataFrame:
+    header_line = detect_header_line(text)
+    df = pd.read_csv(io.StringIO(text), skiprows=header_line)
+
+    # 열 이름과 값에 들어간 불필요한 공백 제거
+    df.columns = [str(col).strip() for col in df.columns]
+    for col in df.select_dtypes(include="object").columns:
+        df[col] = df[col].astype(str).str.strip()
+
+    # 열 이름이 조금 달라도 핵심 열을 찾을 수 있게 처리
+    rename_map = {}
     for col in df.columns:
-        c = str(col).replace(" ", "")
-        if c == "날짜":
-            rename[col] = "날짜"
-        elif c == "지점":
-            rename[col] = "지점"
-        elif "평균기온" in c:
-            rename[col] = "평균기온"
-        elif "최저기온" in c:
-            rename[col] = "최저기온"
-        elif "최고기온" in c:
-            rename[col] = "최고기온"
+        compact = re.sub(r"\s+", "", col)
+        if "날짜" in compact:
+            rename_map[col] = "날짜"
+        elif "평균기온" in compact:
+            rename_map[col] = "평균기온"
+        elif "최저기온" in compact:
+            rename_map[col] = "최저기온"
+        elif "최고기온" in compact:
+            rename_map[col] = "최고기온"
+        elif "지점" in compact or "지역" in compact:
+            rename_map[col] = "지점"
+    df = df.rename(columns=rename_map)
 
-    df = df.rename(columns=rename).copy()
-    needed = ["날짜", "평균기온", "최저기온", "최고기온"]
-    missing = [c for c in needed if c not in df.columns]
+    required = ["날짜", "평균기온", "최저기온", "최고기온"]
+    missing = [col for col in required if col not in df.columns]
     if missing:
-        raise ValueError("필수 열 없음: " + ", ".join(missing))
+        raise ValueError(f"필수 열을 찾을 수 없습니다: {', '.join(missing)}")
 
     df["날짜"] = pd.to_datetime(df["날짜"], errors="coerce")
     for col in ["평균기온", "최저기온", "최고기온"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    df = df.dropna(subset=["날짜", "평균기온"]).sort_values("날짜")
+    df = df.dropna(subset=["날짜"]).copy()
+    df = df.sort_values("날짜").drop_duplicates(subset=["날짜"], keep="last")
     df["연도"] = df["날짜"].dt.year
     df["월"] = df["날짜"].dt.month
     df["일"] = df["날짜"].dt.day
     df["월일"] = df["날짜"].dt.strftime("%m-%d")
-    df["일교차"] = df["최고기온"] - df["최저기온"]
     return df.reset_index(drop=True)
 
 
-def get_record(df, date_value):
-    result = df[df["날짜"] == pd.Timestamp(date_value)]
-    return None if result.empty else result.iloc[0]
+def load_local_file(path: Path) -> pd.DataFrame:
+    raw = path.read_bytes()
+    return load_temperature_data_from_text(decode_uploaded_file(raw))
 
 
-def change_text(change):
-    if pd.isna(change):
-        return "비교할 자료가 충분하지 않습니다."
-    if change >= 0.5:
-        return f"과거보다 약 {change:.1f}℃ 높아졌습니다. 🔥"
-    if change <= -0.5:
-        return f"과거보다 약 {abs(change):.1f}℃ 낮아졌습니다. ❄️"
-    return "과거와 비교해 큰 차이가 없습니다. 🙂"
+# 기본 CSV 자동 읽기 + 업로드 대체 기능
+local_csv = find_default_csv()
+with st.sidebar:
+    st.header("🗂️ 데이터 설정")
+    uploaded_file = st.file_uploader(
+        "다른 기온 CSV 사용",
+        type=["csv"],
+        help="업로드하지 않으면 app.py와 같은 폴더의 CSV를 자동 사용합니다.",
+    )
 
+try:
+    if uploaded_file is not None:
+        data = load_temperature_data_from_text(decode_uploaded_file(uploaded_file.getvalue()))
+        source_name = uploaded_file.name
+    elif local_csv is not None:
+        data = load_local_file(local_csv)
+        source_name = local_csv.name
+    else:
+        st.error("app.py와 같은 폴더에서 CSV 파일을 찾지 못했습니다. 왼쪽에서 파일을 업로드해 주세요.")
+        st.stop()
+except Exception as error:
+    st.error(f"데이터를 읽는 중 오류가 발생했습니다: {error}")
+    st.stop()
 
-# -------------------- 역사 사건 --------------------
-EVENTS = [
-    ("1979-10-26", "10·26 사건", "정치", "대한민국 현대 정치사의 큰 전환점이 된 사건입니다."),
-    ("1980-05-18", "5·18 민주화운동 시작", "민주화", "광주에서 전개된 민주화운동입니다."),
-    ("1987-06-10", "6월 민주항쟁 시작", "민주화", "대통령 직선제와 민주화를 요구한 시민운동입니다."),
-    ("1988-09-17", "서울 올림픽 개막", "스포츠", "서울에서 열린 제24회 하계 올림픽의 개막일입니다."),
-    ("1991-09-17", "남북한 유엔 동시 가입", "외교", "대한민국과 북한이 유엔에 동시에 가입한 날입니다."),
-    ("1993-08-12", "금융실명제 실시", "경제", "금융 거래를 실제 이름으로 하도록 한 제도가 시행되었습니다."),
-    ("1995-06-29", "삼풍백화점 붕괴", "사회", "안전과 책임의 중요성을 되새기게 한 대형 재난입니다."),
-    ("1997-12-03", "IMF 구제금융 합의", "경제", "외환위기 속에서 IMF 구제금융 지원에 합의했습니다."),
-    ("2000-06-13", "제1차 남북정상회담 시작", "남북관계", "평양에서 첫 남북정상회담이 시작되었습니다."),
-    ("2002-06-22", "대한민국 월드컵 4강 진출", "스포츠", "대한민국이 스페인을 꺾고 월드컵 4강에 진출했습니다."),
-    ("2007-12-07", "태안 기름 유출 사고", "환경", "충남 태안 앞바다에서 대규모 원유 유출 사고가 발생했습니다."),
-    ("2010-11-23", "연평도 포격 사건", "남북관계", "연평도 포격으로 군인과 민간인 피해가 발생했습니다."),
-    ("2014-04-16", "세월호 참사", "사회", "전남 진도 인근 해상에서 세월호가 침몰한 참사입니다."),
-    ("2016-03-09", "이세돌과 알파고 첫 대국", "과학기술", "인공지능 알파고와 이세돌 9단의 대결이 시작되었습니다."),
-    ("2018-02-09", "평창 동계올림픽 개막", "스포츠", "평창을 중심으로 열린 동계 올림픽의 개막일입니다."),
-    ("2018-04-27", "판문점 남북정상회담", "남북관계", "판문점에서 남북 정상 간 회담이 열렸습니다."),
-    ("2020-01-20", "국내 코로나19 첫 확진자 확인", "보건", "대한민국에서 코로나19 첫 확진자가 확인되었습니다."),
-    ("2021-10-21", "누리호 1차 발사", "과학기술", "한국형 발사체 누리호가 처음 발사되었습니다."),
-    ("2022-06-21", "누리호 2차 발사 성공", "과학기술", "누리호가 성능검증위성을 목표 궤도에 올렸습니다."),
-]
-history = pd.DataFrame(EVENTS, columns=["날짜", "사건", "분야", "설명"])
-history["날짜"] = pd.to_datetime(history["날짜"])
-
-
-# -------------------- 화면 상단과 데이터 설정 --------------------
-st.markdown('<div class="title">🌡️ 기온으로 떠나는 시간여행</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="subtitle">생일 기온 변화 · 연도 비교 · 역사적 사건의 날씨</div>',
-    unsafe_allow_html=True,
-)
+min_date = data["날짜"].min().date()
+max_date = data["날짜"].max().date()
 
 with st.sidebar:
-    st.header("📂 데이터 설정")
-    upload = st.file_uploader("전국 기온 CSV 업로드", type=["csv"])
+    st.success(f"사용 중인 파일: {source_name}")
+    st.caption(f"기간: {min_date:%Y-%m-%d} ~ {max_date:%Y-%m-%d}")
+    st.caption(f"총 {len(data):,}일의 기온 기록")
+    st.divider()
+    menu = st.radio(
+        "시간여행 메뉴",
+        ["🎂 내 생일이 얼마나 더워졌을까", "⏳ 기온 타임머신", "🏛️ 역사 속 날씨"],
+    )
 
-    try:
-        if upload is not None:
-            raw_df = read_csv_file(upload)
-            source_name = upload.name
-        elif Path(DEFAULT_FILE).exists():
-            raw_df = load_default(DEFAULT_FILE)
-            source_name = DEFAULT_FILE
-        else:
-            st.error(f"`{DEFAULT_FILE}`을 찾을 수 없습니다.")
-            st.stop()
-
-        data = clean_data(raw_df)
-    except Exception as error:
-        st.error(f"데이터 오류: {error}")
-        st.stop()
-
-    st.success(f"사용 데이터: {source_name}")
-    st.caption(f"{data['날짜'].min():%Y-%m-%d} ~ {data['날짜'].max():%Y-%m-%d}")
-    st.caption(f"총 {len(data):,}일")
-    st.info("전국 대표 기온이므로 특정 도시의 실제 기온과 다를 수 있습니다.")
+# =========================================================
+# 공통 함수
+# =========================================================
+def temperature_label(value: float) -> str:
+    if pd.isna(value):
+        return "자료 없음"
+    return f"{value:.1f}℃"
 
 
-tab1, tab2, tab3 = st.tabs([
-    "🎂 내 생일은 얼마나 더워졌을까?",
-    "⏳ 기온 타임머신",
-    "📜 역사 속 그날의 날씨",
-])
+def climate_message(change: float) -> tuple[str, str]:
+    if pd.isna(change):
+        return "비교할 자료가 충분하지 않습니다.", "small-note"
+    if change >= 2:
+        return f"🔥 최근 기온이 과거보다 {change:.1f}℃ 높아졌어요.", "warm"
+    if change >= 0.5:
+        return f"🌡️ 최근 기온이 과거보다 {change:.1f}℃ 높아졌어요.", "warm"
+    if change <= -0.5:
+        return f"❄️ 최근 기온이 과거보다 {abs(change):.1f}℃ 낮아졌어요.", "cool"
+    return "🙂 과거와 최근의 평균기온 차이가 크지 않아요.", "small-note"
 
 
-# ==================== 1. 생일 기온 ====================
-with tab1:
-    st.subheader("🎂 내 생일은 얼마나 더워졌을까?")
+def nearest_weather(target: pd.Timestamp):
+    """해당 날짜가 없을 때 가장 가까운 날짜의 자료를 반환한다."""
+    idx = (data["날짜"] - target).abs().idxmin()
+    return data.loc[idx]
 
-    c1, c2, c3 = st.columns([1, 1, 2])
-    with c1:
-        month = st.selectbox("생일 월", list(range(1, 13)))
-    max_day = 29 if month == 2 else (30 if month in [4, 6, 9, 11] else 31)
-    with c2:
-        day = st.selectbox("생일 일", list(range(1, max_day + 1)))
-    with c3:
-        period = st.slider("과거·최근 평균 기간", 5, 20, 10)
 
-    bday = data[(data["월"] == month) & (data["일"] == day)].copy()
+def weather_for_date(target_date: date):
+    target = pd.Timestamp(target_date)
+    exact = data[data["날짜"] == target]
+    if not exact.empty:
+        return exact.iloc[0], True
+    return nearest_weather(target), False
 
-    if bday.empty:
-        st.warning("선택한 날짜의 자료가 없습니다.")
+
+def render_weather_metrics(row):
+    c1, c2, c3 = st.columns(3)
+    c1.metric("평균기온", temperature_label(row["평균기온"]))
+    c2.metric("최저기온", temperature_label(row["최저기온"]))
+    c3.metric("최고기온", temperature_label(row["최고기온"]))
+
+# =========================================================
+# 1. 내 생일이 얼마나 더워졌을까
+# =========================================================
+if menu == "🎂 내 생일이 얼마나 더워졌을까":
+    st.subheader("🎂 내 생일이 얼마나 더워졌을까?")
+    st.write("생일의 기온이 오랜 시간 동안 어떻게 달라졌는지 확인해 보세요.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        birth_month = st.selectbox("태어난 달", range(1, 13), index=4)
+    with col2:
+        max_day = 29 if birth_month == 2 else (30 if birth_month in [4, 6, 9, 11] else 31)
+        birth_day = st.selectbox("태어난 날", range(1, max_day + 1), index=min(14, max_day - 1))
+
+    birthday_data = data[(data["월"] == birth_month) & (data["일"] == birth_day)].copy()
+    birthday_data = birthday_data.dropna(subset=["평균기온"])
+
+    if birthday_data.empty:
+        st.warning("선택한 날짜의 기온 자료가 없습니다.")
     else:
-        bday = bday.sort_values("연도")
-        n = min(period, len(bday) // 2)
-
-        early = bday.head(n)["평균기온"].mean() if n >= 2 else np.nan
-        recent = bday.tail(n)["평균기온"].mean() if n >= 2 else np.nan
-        diff = recent - early if n >= 2 else np.nan
-
-        warm = bday.loc[bday["평균기온"].idxmax()]
-        cold = bday.loc[bday["평균기온"].idxmin()]
-        latest = bday.iloc[-1]
-
-        st.markdown(
-            f'<div class="card"><h3>📅 {month}월 {day}일</h3><p>{change_text(diff)}</p></div>',
-            unsafe_allow_html=True,
-        )
+        first_n = birthday_data.head(min(10, len(birthday_data)))
+        last_n = birthday_data.tail(min(10, len(birthday_data)))
+        old_avg = first_n["평균기온"].mean()
+        recent_avg = last_n["평균기온"].mean()
+        change = recent_avg - old_avg
+        hottest = birthday_data.loc[birthday_data["최고기온"].idxmax()]
+        coldest = birthday_data.loc[birthday_data["최저기온"].idxmin()]
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric(f"초기 {n}개년 평균", "-" if pd.isna(early) else f"{early:.1f}℃")
-        m2.metric(f"최근 {n}개년 평균", "-" if pd.isna(recent) else f"{recent:.1f}℃",
-                  None if pd.isna(diff) else f"{diff:+.1f}℃")
-        m3.metric("가장 더웠던 생일", f"{warm['평균기온']:.1f}℃", f"{int(warm['연도'])}년")
-        m4.metric("가장 추웠던 생일", f"{cold['평균기온']:.1f}℃", f"{int(cold['연도'])}년")
+        m1.metric("과거 10회 평균", f"{old_avg:.1f}℃")
+        m2.metric("최근 10회 평균", f"{recent_avg:.1f}℃", delta=f"{change:+.1f}℃")
+        m3.metric("가장 더웠던 생일", f"{hottest['최고기온']:.1f}℃", f"{int(hottest['연도'])}년")
+        m4.metric("가장 추웠던 생일", f"{coldest['최저기온']:.1f}℃", f"{int(coldest['연도'])}년")
 
-        trend = bday.dropna(subset=["평균기온"]).copy()
-        if len(trend) >= 2:
-            slope, intercept = np.polyfit(trend["연도"], trend["평균기온"], 1)
-            trend["추세선"] = slope * trend["연도"] + intercept
-        else:
-            slope = np.nan
+        message, css_class = climate_message(change)
+        st.markdown(
+            f"<div class='info-card'><b>{birth_month}월 {birth_day}일 시간여행 결과</b>"
+            f"<div class='big-number {css_class}'>{message}</div>"
+            f"<div class='small-note'>초기 최대 10회와 최근 최대 10회의 평균기온을 비교한 결과입니다.</div></div>",
+            unsafe_allow_html=True,
+        )
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=trend["연도"], y=trend["평균기온"],
-            mode="lines+markers", name="생일 평균기온",
-            line=dict(color="#f39c12", width=2)
+            x=birthday_data["연도"], y=birthday_data["평균기온"],
+            mode="lines+markers", name="평균기온"
         ))
-        if len(trend) >= 2:
+        if len(birthday_data) >= 2:
+            x = birthday_data["연도"].to_numpy()
+            y = birthday_data["평균기온"].to_numpy()
+            slope, intercept = np.polyfit(x, y, 1)
             fig.add_trace(go.Scatter(
-                x=trend["연도"], y=trend["추세선"],
+                x=x, y=slope * x + intercept,
                 mode="lines", name="장기 추세",
-                line=dict(color="#c0392b", width=3, dash="dash")
+                line=dict(dash="dash")
             ))
         fig.update_layout(
-            title=f"{month}월 {day}일의 연도별 평균기온",
-            xaxis_title="연도", yaxis_title="기온(℃)", hovermode="x unified"
+            title=f"{birth_month}월 {birth_day}일의 연도별 평균기온",
+            xaxis_title="연도", yaxis_title="기온(℃)",
+            hovermode="x unified", height=470,
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        if not pd.isna(slope):
-            st.info(f"📈 단순 선형 추세: 10년당 약 **{slope * 10:+.2f}℃**")
+        with st.expander("📋 연도별 생일 기온 보기"):
+            table = birthday_data[["연도", "평균기온", "최저기온", "최고기온"]].sort_values("연도", ascending=False)
+            st.dataframe(table, use_container_width=True, hide_index=True)
 
-        rank = int(bday["평균기온"].rank(method="min", ascending=False).loc[latest.name])
-        st.write(
-            f"최근 자료인 **{int(latest['연도'])}년**의 평균기온은 "
-            f"**{latest['평균기온']:.1f}℃**, 더운 순서로 **{rank}위**입니다."
-        )
-
-        with st.expander("연도별 생일 기온 보기"):
-            show = bday[["날짜", "평균기온", "최저기온", "최고기온", "일교차"]].copy()
-            show["날짜"] = show["날짜"].dt.strftime("%Y-%m-%d")
-            st.dataframe(show, use_container_width=True, hide_index=True)
-
-
-# ==================== 2. 기온 타임머신 ====================
-with tab2:
+# =========================================================
+# 2. 기온 타임머신
+# =========================================================
+elif menu == "⏳ 기온 타임머신":
     st.subheader("⏳ 기온 타임머신")
+    st.write("기억 속 날짜를 선택하고 그날의 전국 평균 기온으로 돌아가 보세요.")
 
-    years = sorted(data["연도"].unique().tolist())
-    c1, c2, c3 = st.columns([1, 1, 2])
+    selected_date = st.date_input(
+        "시간여행을 떠날 날짜",
+        value=max(min(date(2000, 1, 1), max_date), min_date),
+        min_value=min_date,
+        max_value=max_date,
+    )
+
+    row, exact = weather_for_date(selected_date)
+    if not exact:
+        st.info(f"선택한 날짜의 자료가 없어 가장 가까운 {row['날짜']:%Y-%m-%d} 자료를 표시합니다.")
+
+    st.markdown(f"### 📅 {row['날짜']:%Y년 %m월 %d일}의 날씨")
+    render_weather_metrics(row)
+
+    same_day = data[(data["월"] == row["월"]) & (data["일"] == row["일"])].dropna(subset=["평균기온"]).copy()
+    selected_avg = row["평균기온"]
+    normal_avg = same_day["평균기온"].mean()
+    rank_hot = int((same_day["평균기온"] > selected_avg).sum() + 1) if not pd.isna(selected_avg) else None
+
+    c1, c2 = st.columns(2)
     with c1:
-        year1 = st.selectbox("첫 번째 연도", years, index=0, key="y1")
+        if rank_hot:
+            st.markdown(
+                f"<div class='info-card'><b>같은 날짜끼리 비교하면</b>"
+                f"<div class='big-number warm'>{len(same_day)}개 연도 중 {rank_hot}번째로 따뜻함</div>"
+                f"<div class='small-note'>같은 월·일의 평균기온을 높은 순서로 비교했습니다.</div></div>",
+                unsafe_allow_html=True,
+            )
     with c2:
-        year2 = st.selectbox("두 번째 연도", years, index=max(0, len(years)-2), key="y2")
-    with c3:
-        month_range = st.slider("비교할 월", 1, 12, (1, 12))
-
-    filtered = data[
-        data["연도"].isin([year1, year2])
-        & data["월"].between(month_range[0], month_range[1])
-    ].copy()
-
-    y1 = filtered[filtered["연도"] == year1]
-    y2 = filtered[filtered["연도"] == year2]
-
-    if y1.empty or y2.empty:
-        st.warning("비교 자료가 충분하지 않습니다.")
-    else:
-        avg1 = y1["평균기온"].mean()
-        avg2 = y2["평균기온"].mean()
-        avg_diff = avg2 - avg1
-
+        diff = selected_avg - normal_avg
+        word = "높았습니다" if diff >= 0 else "낮았습니다"
         st.markdown(
-            f'<div class="card"><h3>{year1}년 vs {year2}년</h3>'
-            f'<p>{month_range[0]}~{month_range[1]}월 평균기온 차이: '
-            f'<strong>{avg_diff:+.1f}℃</strong></p></div>',
+            f"<div class='info-card'><b>장기 평균과 비교하면</b>"
+            f"<div class='big-number'>{abs(diff):.1f}℃ {word}</div>"
+            f"<div class='small-note'>이 날짜의 전체 연도 평균은 {normal_avg:.1f}℃입니다.</div></div>",
             unsafe_allow_html=True,
         )
 
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric(f"{year1} 평균", f"{avg1:.1f}℃")
-        m2.metric(f"{year2} 평균", f"{avg2:.1f}℃", f"{avg_diff:+.1f}℃")
-        m3.metric(f"{year1} 최고 기록", f"{y1['최고기온'].max():.1f}℃")
-        m4.metric(f"{year2} 최고 기록", f"{y2['최고기온'].max():.1f}℃")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=same_day["연도"], y=same_day["평균기온"],
+        mode="lines+markers", name="같은 날짜 평균기온"
+    ))
+    fig.add_hline(y=normal_avg, line_dash="dot", annotation_text=f"전체 평균 {normal_avg:.1f}℃")
+    fig.add_trace(go.Scatter(
+        x=[row["연도"]], y=[row["평균기온"]],
+        mode="markers", name="선택한 날짜", marker=dict(size=15, symbol="star")
+    ))
+    fig.update_layout(
+        title=f"매년 {int(row['월'])}월 {int(row['일'])}일의 평균기온",
+        xaxis_title="연도", yaxis_title="기온(℃)", height=470,
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-        frames = []
-        for year in [year1, year2]:
-            temp = filtered[filtered["연도"] == year].copy()
-            temp["비교날짜"] = pd.to_datetime(
-                "2000-" + temp["날짜"].dt.strftime("%m-%d"), errors="coerce"
-            )
-            temp["선택연도"] = str(year)
-            frames.append(temp)
+    st.markdown("#### 🗓️ 선택 날짜 전후 7일")
+    around = data[
+        (data["날짜"] >= row["날짜"] - pd.Timedelta(days=7)) &
+        (data["날짜"] <= row["날짜"] + pd.Timedelta(days=7))
+    ]
+    fig2 = px.line(
+        around, x="날짜", y=["최저기온", "평균기온", "최고기온"],
+        markers=True, labels={"value": "기온(℃)", "variable": "구분"}
+    )
+    fig2.add_vline(x=row["날짜"].timestamp() * 1000, line_dash="dash")
+    fig2.update_layout(height=420, hovermode="x unified")
+    st.plotly_chart(fig2, use_container_width=True)
 
-        compare = pd.concat(frames).dropna(subset=["비교날짜"])
-        fig = px.line(
-            compare, x="비교날짜", y="평균기온", color="선택연도",
-            title=f"{year1}년과 {year2}년 일별 평균기온",
-            labels={"비교날짜": "월·일", "평균기온": "기온(℃)", "선택연도": "연도"}
+# =========================================================
+# 3. 역사 속 날씨
+# =========================================================
+else:
+    st.subheader("🏛️ 역사 속 날씨")
+    st.write("역사적인 사건이 일어난 날의 기온을 살펴보고, 당시 계절의 모습을 상상해 보세요.")
+
+    event_mode = st.radio("날짜 선택 방법", ["대표 사건에서 선택", "직접 입력"], horizontal=True)
+
+    if event_mode == "대표 사건에서 선택":
+        event_name = st.selectbox("역사적 사건", list(HISTORICAL_EVENTS.keys()))
+        event_date = datetime.strptime(HISTORICAL_EVENTS[event_name], "%Y-%m-%d").date()
+        st.caption(f"사건 날짜: {event_date:%Y-%m-%d}")
+    else:
+        event_name = st.text_input("사건 이름", value="나만의 역사적 순간")
+        event_date = st.date_input(
+            "사건 날짜",
+            value=max(min(date(2000, 1, 1), max_date), min_date),
+            min_value=min_date,
+            max_value=max_date,
+            key="history_date",
         )
-        fig.update_xaxes(tickformat="%m월 %d일")
-        fig.update_layout(hovermode="x unified")
-        st.plotly_chart(fig, use_container_width=True)
 
-        monthly = filtered.groupby(["연도", "월"])["평균기온"].mean().reset_index()
-        monthly["연도"] = monthly["연도"].astype(str)
-        fig2 = px.bar(
-            monthly, x="월", y="평균기온", color="연도", barmode="group",
-            title="월별 평균기온 비교",
-            labels={"평균기온": "기온(℃)"}
+    row, exact = weather_for_date(event_date)
+    if not exact:
+        st.info(f"해당 날짜의 자료가 없어 가장 가까운 {row['날짜']:%Y-%m-%d} 자료를 사용합니다.")
+
+    st.markdown(f"### 📜 {event_name}")
+    st.markdown(f"**{row['날짜']:%Y년 %m월 %d일}, 전국의 기온 기록**")
+    render_weather_metrics(row)
+
+    daily_range = row["최고기온"] - row["최저기온"]
+    same_day = data[(data["월"] == row["월"]) & (data["일"] == row["일"])].dropna(subset=["평균기온"])
+    percentile = (same_day["평균기온"] <= row["평균기온"]).mean() * 100
+
+    feeling = "매우 더운 날" if row["평균기온"] >= 25 else (
+        "포근한 날" if row["평균기온"] >= 15 else (
+            "선선한 날" if row["평균기온"] >= 5 else "추운 날"
         )
-        fig2.update_xaxes(dtick=1)
-        st.plotly_chart(fig2, use_container_width=True)
-
-        d1 = y1[["월일", "평균기온"]].rename(columns={"평균기온": str(year1)})
-        d2 = y2[["월일", "평균기온"]].rename(columns={"평균기온": str(year2)})
-        merged = pd.merge(d1, d2, on="월일")
-        merged["기온차"] = merged[str(year2)] - merged[str(year1)]
-
-        if not merged.empty:
-            highest = merged.loc[merged["기온차"].idxmax()]
-            lowest = merged.loc[merged["기온차"].idxmin()]
-            c1, c2 = st.columns(2)
-            c1.success(f"🔥 차이가 가장 큰 날: **{highest['월일']}**, {highest['기온차']:+.1f}℃")
-            c2.info(f"❄️ 반대 차이가 가장 큰 날: **{lowest['월일']}**, {lowest['기온차']:+.1f}℃")
-
-
-# ==================== 3. 역사 속 날씨 ====================
-with tab3:
-    st.subheader("📜 역사 속 그날의 날씨")
-
-    usable = history[history["날짜"].between(data["날짜"].min(), data["날짜"].max())].copy()
-    c1, c2 = st.columns([1, 2])
-
-    with c1:
-        categories = ["전체"] + sorted(usable["분야"].unique().tolist())
-        category = st.selectbox("분야", categories)
-
-    options = usable if category == "전체" else usable[usable["분야"] == category]
-    options = options.copy()
-    options["표시"] = options["날짜"].dt.strftime("%Y-%m-%d") + " | " + options["사건"]
-
-    with c2:
-        selected = st.selectbox("역사적 사건", options["표시"].tolist())
-
-    event = options[options["표시"] == selected].iloc[0]
-    date = event["날짜"]
-    weather = get_record(data, date)
+    )
 
     st.markdown(
-        f'<div class="history"><h2>📌 {event["사건"]}</h2>'
-        f'<p><b>날짜:</b> {date:%Y년 %m월 %d일} · <b>분야:</b> {event["분야"]}</p>'
-        f'<p>{event["설명"]}</p></div>',
+        f"<div class='info-card'><b>그날을 날씨로 읽어 보면</b>"
+        f"<div class='big-number'>{feeling}이었어요.</div>"
+        f"<div class='small-note'>일교차는 {daily_range:.1f}℃였고, 같은 날짜의 역대 기록 중 "
+        f"약 {percentile:.0f}%보다 따뜻한 편이었습니다.</div></div>",
         unsafe_allow_html=True,
     )
 
-    if weather is None:
-        st.warning("이 날짜의 기온 자료가 없습니다.")
-    else:
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("평균기온", f"{weather['평균기온']:.1f}℃")
-        m2.metric("최고기온", f"{weather['최고기온']:.1f}℃")
-        m3.metric("최저기온", f"{weather['최저기온']:.1f}℃")
-        m4.metric("일교차", f"{weather['일교차']:.1f}℃")
-
-        window = data[data["날짜"].between(
-            date - pd.Timedelta(days=7), date + pd.Timedelta(days=7)
-        )].copy()
-
-        fig = go.Figure()
-        for col, name, color in [
-            ("최고기온", "최고기온", "#e74c3c"),
-            ("평균기온", "평균기온", "#f39c12"),
-            ("최저기온", "최저기온", "#2980b9"),
-        ]:
-            fig.add_trace(go.Scatter(
-                x=window["날짜"], y=window[col], mode="lines+markers",
-                name=name, line=dict(color=color)
-            ))
-        fig.add_vline(x=date, line_width=3, line_dash="dash", line_color="#8e44ad")
-        fig.update_layout(
-            title=f"{event['사건']} 전후 7일 기온",
-            xaxis_title="날짜", yaxis_title="기온(℃)", hovermode="x unified"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        same_day = data[(data["월"] == date.month) & (data["일"] == date.day)].copy()
-        event_index = same_day[same_day["날짜"] == date].index
-        if len(event_index) > 0:
-            rank = int(same_day["평균기온"].rank(method="min", ascending=False).loc[event_index[0]])
-            normal = same_day["평균기온"].mean()
-            st.info(
-                f"같은 월·일의 역대 평균은 **{normal:.1f}℃**입니다. "
-                f"사건 당일은 이보다 **{weather['평균기온'] - normal:+.1f}℃**, "
-                f"더운 순서로 **{rank}위**입니다."
-            )
-
-        fig2 = px.line(
-            same_day, x="연도", y="평균기온", markers=True,
-            title=f"역대 {date.month}월 {date.day}일 평균기온",
-            labels={"평균기온": "기온(℃)"}
-        )
-        fig2.add_scatter(
-            x=[date.year], y=[weather["평균기온"]], mode="markers",
-            name="사건 당일", marker=dict(size=15, symbol="star", color="#8e44ad")
-        )
-        st.plotly_chart(fig2, use_container_width=True)
-
-    st.divider()
-    st.markdown("#### 🔍 날짜 직접 탐색")
-    custom = st.date_input(
-        "확인할 날짜",
-        value=date.date(),
-        min_value=data["날짜"].min().date(),
-        max_value=data["날짜"].max().date(),
+    # 같은 해의 월별 평균과 사건 날짜 강조
+    year_data = data[data["연도"] == row["연도"]].copy()
+    monthly = year_data.groupby("월", as_index=False)[["평균기온", "최저기온", "최고기온"]].mean()
+    fig = px.line(
+        monthly, x="월", y=["최저기온", "평균기온", "최고기온"], markers=True,
+        labels={"value": "월평균 기온(℃)", "variable": "구분"},
+        title=f"{int(row['연도'])}년 월별 기온 흐름"
     )
-    custom_weather = get_record(data, custom)
+    fig.add_vline(x=int(row["월"]), line_dash="dash", annotation_text="사건이 있었던 달")
+    fig.update_xaxes(dtick=1)
+    fig.update_layout(height=450, hovermode="x unified")
+    st.plotly_chart(fig, use_container_width=True)
 
-    if custom_weather is not None:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("평균기온", f"{custom_weather['평균기온']:.1f}℃")
-        c2.metric("최저기온", f"{custom_weather['최저기온']:.1f}℃")
-        c3.metric("최고기온", f"{custom_weather['최고기온']:.1f}℃")
-    else:
-        st.warning("선택한 날짜의 자료가 없습니다.")
+    # 역사 탐구 질문
+    st.markdown("#### 🧭 역사·지리 융합 탐구")
+    questions = [
+        f"{event_name} 당시 사람들의 옷차림과 야외 활동은 날씨의 영향을 받았을까요?",
+        f"같은 {row['월']}월 {row['일']}일의 기온은 최근에 어떻게 달라지고 있을까요?",
+        "당시 신문 기사나 사진 속 계절 표현과 실제 기온 기록은 일치할까요?",
+    ]
+    for q in questions:
+        st.markdown(f"- {q}")
 
-    with st.expander("역사 사건을 추가하는 방법"):
-        st.write("app.py 위쪽의 EVENTS 목록에 아래 형식으로 한 줄을 추가합니다.")
-        st.code(
-            '("2002-06-22", "사건 이름", "분야", "사건 설명"),',
-            language="python"
-        )
+    with st.expander("🔎 같은 날짜의 역대 기온 기록"):
+        history_table = same_day[["연도", "평균기온", "최저기온", "최고기온"]].sort_values("연도", ascending=False)
+        st.dataframe(history_table, use_container_width=True, hide_index=True)
 
 st.divider()
-st.caption(
-    "※ 전국 대표 기온 자료를 이용한 학습용 앱입니다. "
-    "특정 지역의 실제 관측값과는 차이가 있을 수 있습니다."
-)
+st.caption("※ 이 앱은 CSV에 기록된 전국 대표 기온 자료를 활용합니다. 지역별 실제 체감 날씨와는 차이가 있을 수 있습니다.")

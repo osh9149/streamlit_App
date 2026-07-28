@@ -3,6 +3,8 @@ import streamlit.components.v1 as components
 import plotly.graph_objects as go
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
+from urllib.request import urlretrieve
 from html import escape
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.colors import HexColor
@@ -130,27 +132,54 @@ def reset_all():
 
 
 def get_korean_font_path(bold=False):
-    """Streamlit Cloud와 일반 Linux 환경에서 사용할 한글 폰트를 찾습니다."""
-    candidates = (
+    """
+    PDF와 PNG에 사용할 한글 글꼴을 찾습니다.
+    서버에 한글 글꼴이 없으면 Google Fonts의 나눔고딕을
+    앱 캐시 폴더에 한 번만 내려받아 사용합니다.
+    """
+    local_candidates = (
         [
             "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+            "/usr/share/fonts/truetype/nanum/NanumBarunGothicBold.ttf",
+            "/usr/share/fonts/truetype/unfonts-core/UnDotumBold.ttf",
         ]
         if bold
         else [
             "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf",
+            "/usr/share/fonts/truetype/unfonts-core/UnDotum.ttf",
         ]
     )
 
-    for path in candidates:
-        try:
-            with open(path, "rb"):
-                return path
-        except OSError:
-            continue
+    for font_path in local_candidates:
+        if Path(font_path).exists():
+            return font_path
+
+    # Streamlit Cloud에 글꼴이 없는 경우 자동 다운로드
+    cache_dir = Path.home() / ".cache" / "training_reflection_fonts"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    file_name = "NanumGothic-Bold.ttf" if bold else "NanumGothic-Regular.ttf"
+    cached_font = cache_dir / file_name
+
+    if cached_font.exists() and cached_font.stat().st_size > 100_000:
+        return str(cached_font)
+
+    font_url = (
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/"
+        f"nanumgothic/{file_name}"
+    )
+
+    try:
+        urlretrieve(font_url, cached_font)
+
+        if cached_font.exists() and cached_font.stat().st_size > 100_000:
+            return str(cached_font)
+    except Exception:
+        pass
 
     return None
+
 
 
 def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_name):
@@ -160,18 +189,24 @@ def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_na
     regular_path = get_korean_font_path(False)
     bold_path = get_korean_font_path(True)
 
+    regular_font = "Helvetica"
+    bold_font = "Helvetica-Bold"
+
     if regular_path and bold_path:
         try:
-            pdfmetrics.registerFont(TTFont("Korean", regular_path))
-            pdfmetrics.registerFont(TTFont("KoreanBold", bold_path))
-            regular_font = "Korean"
-            bold_font = "KoreanBold"
+            # 같은 프로세스에서 여러 번 생성해도 중복 등록 오류가 없도록 처리
+            if "KoreanNanum" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont("KoreanNanum", regular_path))
+
+            if "KoreanNanumBold" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont("KoreanNanumBold", bold_path))
+
+            regular_font = "KoreanNanum"
+            bold_font = "KoreanNanumBold"
         except Exception:
+            # 폰트 등록 실패 시에도 파일 생성은 계속 진행
             regular_font = "Helvetica"
             bold_font = "Helvetica-Bold"
-    else:
-        regular_font = "Helvetica"
-        bold_font = "Helvetica-Bold"
 
     page_width, page_height = A4
     pdf = canvas.Canvas(buffer, pagesize=A4)
@@ -319,6 +354,17 @@ def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_na
     return buffer.getvalue()
 
 
+def load_pillow_font(font_path, size):
+    """한글 폰트를 Pillow에서 안전하게 불러옵니다."""
+    if font_path:
+        try:
+            return ImageFont.truetype(font_path, size)
+        except Exception:
+            pass
+
+    return ImageFont.load_default()
+
+
 def build_report_image(avg_score, total_score, strength, growth, today, trainee_name):
     """최종 리포트 요약 이미지를 PNG로 생성합니다."""
     width, height = 1500, 1050
@@ -328,10 +374,10 @@ def build_report_image(avg_score, total_score, strength, growth, today, trainee_
     regular_path = get_korean_font_path(False)
     bold_path = get_korean_font_path(True)
 
-    regular = ImageFont.truetype(regular_path, 30) if regular_path else ImageFont.load_default()
-    small = ImageFont.truetype(regular_path, 23) if regular_path else ImageFont.load_default()
-    bold = ImageFont.truetype(bold_path, 38) if bold_path else ImageFont.load_default()
-    big = ImageFont.truetype(bold_path, 54) if bold_path else ImageFont.load_default()
+    regular = load_pillow_font(regular_path, 30)
+    small = load_pillow_font(regular_path, 23)
+    bold = load_pillow_font(bold_path, 38)
+    big = load_pillow_font(bold_path, 54)
 
     # 메인 카드
     draw.rounded_rectangle(
@@ -1035,14 +1081,15 @@ if st.session_state.page != "report":
         <div class="top-icon">✓</div>
         <div class="top-title">연수과정 돌아보기</div>
         <div class="top-desc">
-            연수를 지나오며 내가 느낀 성장의 깊이를 점수로 표현해보고,
-            과정별 배움을 한 줄 회고로 남겨보세요.<br>
+            이번 연수를 지나오며 내가 느낀 성장의 깊이를 점수로 표현해보고,
+            과정별 배움을 한 줄 회고로 남겨보세요.
             모든 작성이 끝나면 나만의 회고 대시보드와 카드가 완성됩니다.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    st.markdown('<div class="tab-shell">', unsafe_allow_html=True)
     tab1, tab2 = st.columns(2)
 
     with tab1:
@@ -1248,6 +1295,15 @@ elif st.session_state.page == "report":
     today = datetime.now().strftime("%Y년 %m월 %d일")
     trainee_name = st.session_state.name.strip() or "연수생"
 
+    korean_regular_font = get_korean_font_path(False)
+    korean_bold_font = get_korean_font_path(True)
+
+    if not korean_regular_font or not korean_bold_font:
+        st.warning(
+            "한글 글꼴을 준비하지 못했습니다. "
+            "네트워크 연결 후 앱을 다시 실행하면 글꼴을 자동으로 내려받습니다."
+        )
+
     pdf_bytes = build_report_pdf(
         avg_score,
         total_score,
@@ -1305,15 +1361,44 @@ elif st.session_state.page == "report":
                 )
 
         with print_col:
-            if st.button("▣  인쇄", use_container_width=True):
-                components.html(
-                    """
-                    <script>
-                    window.parent.print();
-                    </script>
-                    """,
-                    height=0,
-                )
+            # Streamlit 이벤트 버튼 대신 브라우저 버튼을 직접 사용합니다.
+            # 클릭할 때마다 window.print()가 실행되어 반복 인쇄가 가능합니다.
+            components.html(
+                """
+                <style>
+                    html, body {
+                        margin: 0;
+                        padding: 0;
+                        background: transparent;
+                        overflow: hidden;
+                    }
+
+                    .print-button {
+                        width: 100%;
+                        height: 52px;
+                        border: 1px solid #DDE3ED;
+                        border-radius: 14px;
+                        background: #FFFFFF;
+                        color: #4B5568;
+                        font-family: Arial, sans-serif;
+                        font-size: 15px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        box-shadow: 0 4px 10px rgba(30, 41, 59, 0.06);
+                    }
+
+                    .print-button:hover {
+                        border-color: #4F67E8;
+                        color: #4F67E8;
+                    }
+                </style>
+
+                <button class="print-button" onclick="window.parent.print();">
+                    🖨 인쇄
+                </button>
+                """,
+                height=54,
+            )
 
         with reset_col:
             if st.button("↻  다시 작성", use_container_width=True):

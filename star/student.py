@@ -228,11 +228,11 @@ def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_na
     # 제목
     y = page_height - 72
     pdf.setFillColor(HexColor("#172033"))
-    pdf.setFont(bold_font, 16)
+    pdf.setFont(bold_font, 8.5)
     pdf.drawString(54, y, "역량 진단 및 한 줄 회고 리포트")
 
     pdf.setFillColor(HexColor("#8390A6"))
-    pdf.setFont(regular_font, 9)
+    pdf.setFont(regular_font, 7.5)
     pdf.drawString(54, y - 18, f"{today} · {trainee_name}")
 
     # 구분선
@@ -258,12 +258,12 @@ def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_na
         pdf.roundRect(x, metric_y, metric_width, 62, 12, fill=1, stroke=1)
 
         pdf.setFillColor(HexColor("#71809A"))
-        pdf.setFont(regular_font, 8)
+        pdf.setFont(regular_font, 6.8)
         pdf.drawString(x + 12, metric_y + 42, label)
 
         pdf.setFillColor(HexColor("#172033"))
-        pdf.setFont(bold_font, 14)
-        pdf.drawString(x + 12, metric_y + 17, value)
+        pdf.setFont(bold_font, 9)
+        pdf.drawString(x + 12, metric_y + 19, value)
 
     # 강점/보완
     box_y = metric_y - 104
@@ -273,9 +273,9 @@ def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_na
     pdf.setFont(bold_font, 9)
     pdf.drawString(68, box_y + 54, "강점 역량")
     pdf.setFillColor(HexColor("#172033"))
-    pdf.setFont(bold_font, 13)
+    pdf.setFont(bold_font, 8.5)
     pdf.drawString(68, box_y + 31, f"{strength['code']}  {strength['title']}")
-    pdf.setFont(regular_font, 9)
+    pdf.setFont(regular_font, 7.5)
     pdf.setFillColor(HexColor("#71809A"))
     pdf.drawString(68, box_y + 14, f"{max(st.session_state.scores.values())}점 · 최고 점수")
 
@@ -285,16 +285,16 @@ def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_na
     pdf.setFont(bold_font, 9)
     pdf.drawString(319, box_y + 54, "보완 역량")
     pdf.setFillColor(HexColor("#172033"))
-    pdf.setFont(bold_font, 13)
+    pdf.setFont(bold_font, 8.5)
     pdf.drawString(319, box_y + 31, f"{growth['code']}  {growth['title']}")
-    pdf.setFont(regular_font, 9)
+    pdf.setFont(regular_font, 7.5)
     pdf.setFillColor(HexColor("#71809A"))
     pdf.drawString(319, box_y + 14, f"{min(st.session_state.scores.values())}점 · 보완 필요")
 
     # 항목별 점수 및 회고
     y = box_y - 32
     pdf.setFillColor(HexColor("#172033"))
-    pdf.setFont(bold_font, 11)
+    pdf.setFont(bold_font, 9)
     pdf.drawString(54, y, "항목별 점수 및 한 줄 회고")
 
     y -= 24
@@ -319,18 +319,18 @@ def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_na
         pdf.roundRect(66, y - 42, 32, 32, 8, fill=1, stroke=0)
 
         pdf.setFillColor(HexColor("#FFFFFF"))
-        pdf.setFont(bold_font, 11)
+        pdf.setFont(bold_font, 9)
         pdf.drawCentredString(82, y - 31, item["code"])
 
         pdf.setFillColor(HexColor("#172033"))
-        pdf.setFont(bold_font, 10)
+        pdf.setFont(bold_font, 8.5)
         pdf.drawString(110, y - 18, f"{item['title']} · {score}점")
 
         pdf.setFillColor(HexColor("#66728A"))
-        pdf.setFont(regular_font, 8)
+        pdf.setFont(regular_font, 6.8)
 
         # 간단 줄바꿈
-        max_chars = 46
+        max_chars = 58
         lines = [
             reflection[i:i + max_chars]
             for i in range(0, len(reflection), max_chars)
@@ -342,7 +342,7 @@ def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_na
         y -= 72
 
     pdf.setFillColor(HexColor("#9AA6BA"))
-    pdf.setFont(regular_font, 8)
+    pdf.setFont(regular_font, 6.8)
     pdf.drawCentredString(
         page_width / 2,
         48,
@@ -374,10 +374,13 @@ def build_report_image(avg_score, total_score, strength, growth, today, trainee_
     regular_path = get_korean_font_path(False)
     bold_path = get_korean_font_path(True)
 
-    regular = load_pillow_font(regular_path, 30)
-    small = load_pillow_font(regular_path, 23)
-    bold = load_pillow_font(bold_path, 38)
-    big = load_pillow_font(bold_path, 54)
+    # 저장 이미지에서는 웹 화면보다 글꼴을 작게 사용합니다.
+    body_font = load_pillow_font(regular_path, 20)
+    small_font = load_pillow_font(regular_path, 16)
+    caption_font = load_pillow_font(regular_path, 14)
+    title_font = load_pillow_font(bold_path, 28)
+    section_font = load_pillow_font(bold_path, 22)
+    metric_font = load_pillow_font(bold_path, 34)
 
     # 메인 카드
     draw.rounded_rectangle(
@@ -388,8 +391,8 @@ def build_report_image(avg_score, total_score, strength, growth, today, trainee_
         width=2,
     )
 
-    draw.text((82, 86), "역량 진단 및 한 줄 회고 리포트", fill="#172033", font=bold)
-    draw.text((82, 145), f"{today} · {trainee_name}", fill="#8390A6", font=small)
+    draw.text((82, 90), "역량 진단 및 한 줄 회고 리포트", fill="#172033", font=title_font)
+    draw.text((82, 142), f"{today} · {trainee_name}", fill="#8390A6", font=caption_font)
 
     # 지표 카드
     metrics = [
@@ -409,33 +412,33 @@ def build_report_image(avg_score, total_score, strength, growth, today, trainee_
             outline="#E6EBF3",
             width=2,
         )
-        draw.text((x1 + 24, 245), label, fill="#71809A", font=small)
-        draw.text((x1 + 24, 290), value, fill="#172033", font=big)
+        draw.text((x1 + 24, 248), label, fill="#71809A", font=caption_font)
+        draw.text((x1 + 24, 290), value, fill="#172033", font=metric_font)
 
     # 강점/보완
     draw.rounded_rectangle((82, 395, 700, 535), radius=24, fill="#EEF5FF")
-    draw.text((112, 423), "강점 역량", fill="#4F67E8", font=small)
-    draw.text((112, 470), f"{strength['code']}  {strength['title']}", fill="#172033", font=bold)
+    draw.text((112, 426), "강점 역량", fill="#4F67E8", font=caption_font)
+    draw.text((112, 468), f"{strength['code']}  {strength['title']}", fill="#172033", font=section_font)
 
     draw.rounded_rectangle((730, 395, 1348, 535), radius=24, fill="#FFF8E9")
-    draw.text((760, 423), "보완 역량", fill="#D88A00", font=small)
-    draw.text((760, 470), f"{growth['code']}  {growth['title']}", fill="#172033", font=bold)
+    draw.text((760, 426), "보완 역량", fill="#D88A00", font=caption_font)
+    draw.text((760, 468), f"{growth['code']}  {growth['title']}", fill="#172033", font=section_font)
 
     # 점수 목록
-    draw.text((82, 590), "항목별 점수", fill="#172033", font=bold)
+    draw.text((82, 592), "항목별 점수", fill="#172033", font=section_font)
 
     y = 650
     for item in COMPETENCIES:
         score = st.session_state.scores[item["code"]]
 
-        draw.text((94, y), item["title"], fill="#42506A", font=regular)
+        draw.text((94, y + 3), item["title"], fill="#42506A", font=small_font)
         draw.rounded_rectangle((330, y + 8, 1050, y + 30), radius=11, fill="#EDF1F7")
         draw.rounded_rectangle(
             (330, y + 8, 330 + int(720 * score / 5), y + 30),
             radius=11,
             fill=item["color"],
         )
-        draw.text((1090, y - 2), str(score), fill="#172033", font=bold)
+        draw.text((1090, y + 1), str(score), fill="#172033", font=section_font)
         y += 56
 
     output = BytesIO()

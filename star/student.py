@@ -1,6 +1,15 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.graph_objects as go
 from datetime import datetime
+from io import BytesIO
+from html import escape
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.colors import HexColor
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
+from PIL import Image, ImageDraw, ImageFont
 
 # =========================================================
 # 페이지 설정
@@ -107,6 +116,286 @@ def all_complete():
 def go_to(page_name):
     st.session_state.page = page_name
     st.rerun()
+
+
+
+def reset_all():
+    """모든 입력값을 초기화하고 첫 화면으로 이동합니다."""
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+
+    st.session_state.page = "score"
+    st.session_state.scores = {}
+    st.session_state.name = ""
+
+
+def get_korean_font_path(bold=False):
+    """Streamlit Cloud와 일반 Linux 환경에서 사용할 한글 폰트를 찾습니다."""
+    candidates = (
+        [
+            "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+        ]
+        if bold
+        else [
+            "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        ]
+    )
+
+    for path in candidates:
+        try:
+            with open(path, "rb"):
+                return path
+        except OSError:
+            continue
+
+    return None
+
+
+def build_report_pdf(avg_score, total_score, strength, growth, today, trainee_name):
+    """최종 리포트를 PDF 파일로 생성합니다."""
+    buffer = BytesIO()
+
+    regular_path = get_korean_font_path(False)
+    bold_path = get_korean_font_path(True)
+
+    if regular_path and bold_path:
+        try:
+            pdfmetrics.registerFont(TTFont("Korean", regular_path))
+            pdfmetrics.registerFont(TTFont("KoreanBold", bold_path))
+            regular_font = "Korean"
+            bold_font = "KoreanBold"
+        except Exception:
+            regular_font = "Helvetica"
+            bold_font = "Helvetica-Bold"
+    else:
+        regular_font = "Helvetica"
+        bold_font = "Helvetica-Bold"
+
+    page_width, page_height = A4
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+
+    # 배경
+    pdf.setFillColor(HexColor("#F6F8FC"))
+    pdf.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+
+    # 메인 카드
+    margin = 28
+    card_x = margin
+    card_y = 34
+    card_w = page_width - margin * 2
+    card_h = page_height - 68
+
+    pdf.setFillColor(HexColor("#FFFFFF"))
+    pdf.roundRect(card_x, card_y, card_w, card_h, 18, fill=1, stroke=0)
+
+    # 제목
+    y = page_height - 72
+    pdf.setFillColor(HexColor("#172033"))
+    pdf.setFont(bold_font, 16)
+    pdf.drawString(54, y, "역량 진단 및 한 줄 회고 리포트")
+
+    pdf.setFillColor(HexColor("#8390A6"))
+    pdf.setFont(regular_font, 9)
+    pdf.drawString(54, y - 18, f"{today} · {trainee_name}")
+
+    # 구분선
+    pdf.setStrokeColor(HexColor("#E7ECF3"))
+    pdf.line(54, y - 38, page_width - 54, y - 38)
+
+    # 요약 지표
+    metric_y = y - 92
+    metric_width = 118
+    gap = 8
+    metrics = [
+        ("평균 점수", f"{avg_score:.1f} / 5"),
+        ("총점", f"{total_score} / 30"),
+        ("역량 평가", f"{score_count()} / 6 완료"),
+        ("한 줄 회고", f"{reflection_count()} / 6 완료"),
+    ]
+
+    for idx, (label, value) in enumerate(metrics):
+        x = 54 + idx * (metric_width + gap)
+
+        pdf.setFillColor(HexColor("#FFFFFF"))
+        pdf.setStrokeColor(HexColor("#E5EAF2"))
+        pdf.roundRect(x, metric_y, metric_width, 62, 12, fill=1, stroke=1)
+
+        pdf.setFillColor(HexColor("#71809A"))
+        pdf.setFont(regular_font, 8)
+        pdf.drawString(x + 12, metric_y + 42, label)
+
+        pdf.setFillColor(HexColor("#172033"))
+        pdf.setFont(bold_font, 14)
+        pdf.drawString(x + 12, metric_y + 17, value)
+
+    # 강점/보완
+    box_y = metric_y - 104
+    pdf.setFillColor(HexColor("#EEF5FF"))
+    pdf.roundRect(54, box_y, 236, 76, 12, fill=1, stroke=0)
+    pdf.setFillColor(HexColor("#4F67E8"))
+    pdf.setFont(bold_font, 9)
+    pdf.drawString(68, box_y + 54, "강점 역량")
+    pdf.setFillColor(HexColor("#172033"))
+    pdf.setFont(bold_font, 13)
+    pdf.drawString(68, box_y + 31, f"{strength['code']}  {strength['title']}")
+    pdf.setFont(regular_font, 9)
+    pdf.setFillColor(HexColor("#71809A"))
+    pdf.drawString(68, box_y + 14, f"{max(st.session_state.scores.values())}점 · 최고 점수")
+
+    pdf.setFillColor(HexColor("#FFF8E9"))
+    pdf.roundRect(305, box_y, 236, 76, 12, fill=1, stroke=0)
+    pdf.setFillColor(HexColor("#D88A00"))
+    pdf.setFont(bold_font, 9)
+    pdf.drawString(319, box_y + 54, "보완 역량")
+    pdf.setFillColor(HexColor("#172033"))
+    pdf.setFont(bold_font, 13)
+    pdf.drawString(319, box_y + 31, f"{growth['code']}  {growth['title']}")
+    pdf.setFont(regular_font, 9)
+    pdf.setFillColor(HexColor("#71809A"))
+    pdf.drawString(319, box_y + 14, f"{min(st.session_state.scores.values())}점 · 보완 필요")
+
+    # 항목별 점수 및 회고
+    y = box_y - 32
+    pdf.setFillColor(HexColor("#172033"))
+    pdf.setFont(bold_font, 11)
+    pdf.drawString(54, y, "항목별 점수 및 한 줄 회고")
+
+    y -= 24
+
+    for item in COMPETENCIES:
+        score = st.session_state.scores[item["code"]]
+        reflection = st.session_state.get(
+            f"reflection_{item['code']}",
+            ""
+        ).strip() or "작성된 회고가 없습니다."
+
+        if y < 100:
+            pdf.showPage()
+            pdf.setFillColor(HexColor("#F6F8FC"))
+            pdf.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+            y = page_height - 60
+
+        pdf.setFillColor(HexColor("#F8FAFD"))
+        pdf.roundRect(54, y - 54, page_width - 108, 62, 10, fill=1, stroke=0)
+
+        pdf.setFillColor(HexColor(item["color"]))
+        pdf.roundRect(66, y - 42, 32, 32, 8, fill=1, stroke=0)
+
+        pdf.setFillColor(HexColor("#FFFFFF"))
+        pdf.setFont(bold_font, 11)
+        pdf.drawCentredString(82, y - 31, item["code"])
+
+        pdf.setFillColor(HexColor("#172033"))
+        pdf.setFont(bold_font, 10)
+        pdf.drawString(110, y - 18, f"{item['title']} · {score}점")
+
+        pdf.setFillColor(HexColor("#66728A"))
+        pdf.setFont(regular_font, 8)
+
+        # 간단 줄바꿈
+        max_chars = 46
+        lines = [
+            reflection[i:i + max_chars]
+            for i in range(0, len(reflection), max_chars)
+        ][:2]
+
+        for line_idx, line in enumerate(lines):
+            pdf.drawString(110, y - 36 - line_idx * 12, line)
+
+        y -= 72
+
+    pdf.setFillColor(HexColor("#9AA6BA"))
+    pdf.setFont(regular_font, 8)
+    pdf.drawCentredString(
+        page_width / 2,
+        48,
+        "본 리포트는 연수생 본인의 자기 진단 및 회고를 위해 작성되었습니다."
+    )
+
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def build_report_image(avg_score, total_score, strength, growth, today, trainee_name):
+    """최종 리포트 요약 이미지를 PNG로 생성합니다."""
+    width, height = 1500, 1050
+    image = Image.new("RGB", (width, height), "#F6F8FC")
+    draw = ImageDraw.Draw(image)
+
+    regular_path = get_korean_font_path(False)
+    bold_path = get_korean_font_path(True)
+
+    regular = ImageFont.truetype(regular_path, 30) if regular_path else ImageFont.load_default()
+    small = ImageFont.truetype(regular_path, 23) if regular_path else ImageFont.load_default()
+    bold = ImageFont.truetype(bold_path, 38) if bold_path else ImageFont.load_default()
+    big = ImageFont.truetype(bold_path, 54) if bold_path else ImageFont.load_default()
+
+    # 메인 카드
+    draw.rounded_rectangle(
+        (38, 38, width - 38, height - 38),
+        radius=36,
+        fill="#FFFFFF",
+        outline="#E1E7F0",
+        width=2,
+    )
+
+    draw.text((82, 86), "역량 진단 및 한 줄 회고 리포트", fill="#172033", font=bold)
+    draw.text((82, 145), f"{today} · {trainee_name}", fill="#8390A6", font=small)
+
+    # 지표 카드
+    metrics = [
+        ("평균 점수", f"{avg_score:.1f} / 5"),
+        ("총점", f"{total_score} / 30"),
+        ("역량 평가", f"{score_count()} / 6 완료"),
+        ("한 줄 회고", f"{reflection_count()} / 6 완료"),
+    ]
+
+    card_w = 315
+    for idx, (label, value) in enumerate(metrics):
+        x1 = 82 + idx * 342
+        draw.rounded_rectangle(
+            (x1, 220, x1 + card_w, 350),
+            radius=24,
+            fill="#FFFFFF",
+            outline="#E6EBF3",
+            width=2,
+        )
+        draw.text((x1 + 24, 245), label, fill="#71809A", font=small)
+        draw.text((x1 + 24, 290), value, fill="#172033", font=big)
+
+    # 강점/보완
+    draw.rounded_rectangle((82, 395, 700, 535), radius=24, fill="#EEF5FF")
+    draw.text((112, 423), "강점 역량", fill="#4F67E8", font=small)
+    draw.text((112, 470), f"{strength['code']}  {strength['title']}", fill="#172033", font=bold)
+
+    draw.rounded_rectangle((730, 395, 1348, 535), radius=24, fill="#FFF8E9")
+    draw.text((760, 423), "보완 역량", fill="#D88A00", font=small)
+    draw.text((760, 470), f"{growth['code']}  {growth['title']}", fill="#172033", font=bold)
+
+    # 점수 목록
+    draw.text((82, 590), "항목별 점수", fill="#172033", font=bold)
+
+    y = 650
+    for item in COMPETENCIES:
+        score = st.session_state.scores[item["code"]]
+
+        draw.text((94, y), item["title"], fill="#42506A", font=regular)
+        draw.rounded_rectangle((330, y + 8, 1050, y + 30), radius=11, fill="#EDF1F7")
+        draw.rounded_rectangle(
+            (330, y + 8, 330 + int(720 * score / 5), y + 30),
+            radius=11,
+            fill=item["color"],
+        )
+        draw.text((1090, y - 2), str(score), fill="#172033", font=bold)
+        y += 56
+
+    output = BytesIO()
+    image.save(output, format="PNG")
+    output.seek(0)
+    return output.getvalue()
 
 
 def build_radar_chart():
@@ -399,6 +688,58 @@ st.markdown(
         margin-top: 5px;
     }
 
+
+    .dashboard-toolbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin: 6px 0 28px;
+    }
+
+    .dashboard-title {
+        color: #172033;
+        font-size: 1.65rem;
+        font-weight: 900;
+        letter-spacing: -0.035em;
+        margin-bottom: 8px;
+    }
+
+    .dashboard-subtitle {
+        color: #6F7C93;
+        font-size: 0.92rem;
+    }
+
+    .toolbar-hint {
+        color: #8D99AC;
+        font-size: 0.76rem;
+        text-align: right;
+        margin-top: 5px;
+    }
+
+    @media print {
+        .dashboard-toolbar,
+        div[data-testid="stButton"],
+        div[data-testid="stDownloadButton"],
+        div[data-testid="stPopover"] {
+            display: none !important;
+        }
+
+        .stApp {
+            background: #FFFFFF !important;
+        }
+
+        .block-container {
+            max-width: 100% !important;
+            padding: 0 !important;
+        }
+
+        .report-shell {
+            box-shadow: none !important;
+            border: none !important;
+        }
+    }
+
     .report-shell {
         background: #FFFFFF;
         border: 1px solid #E1E7F0;
@@ -624,7 +965,59 @@ st.markdown(
             padding: 20px 17px 16px !important;
         }
 
+    
+    .dashboard-toolbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin: 6px 0 28px;
+    }
+
+    .dashboard-title {
+        color: #172033;
+        font-size: 1.65rem;
+        font-weight: 900;
+        letter-spacing: -0.035em;
+        margin-bottom: 8px;
+    }
+
+    .dashboard-subtitle {
+        color: #6F7C93;
+        font-size: 0.92rem;
+    }
+
+    .toolbar-hint {
+        color: #8D99AC;
+        font-size: 0.76rem;
+        text-align: right;
+        margin-top: 5px;
+    }
+
+    @media print {
+        .dashboard-toolbar,
+        div[data-testid="stButton"],
+        div[data-testid="stDownloadButton"],
+        div[data-testid="stPopover"] {
+            display: none !important;
+        }
+
+        .stApp {
+            background: #FFFFFF !important;
+        }
+
+        .block-container {
+            max-width: 100% !important;
+            padding: 0 !important;
+        }
+
         .report-shell {
+            box-shadow: none !important;
+            border: none !important;
+        }
+    }
+
+    .report-shell {
             padding: 18px;
         }
     }
@@ -856,6 +1249,78 @@ elif st.session_state.page == "report":
     today = datetime.now().strftime("%Y년 %m월 %d일")
     trainee_name = st.session_state.name.strip() or "연수생"
 
+    pdf_bytes = build_report_pdf(
+        avg_score,
+        total_score,
+        strength,
+        growth,
+        today,
+        trainee_name,
+    )
+
+    image_bytes = build_report_image(
+        avg_score,
+        total_score,
+        strength,
+        growth,
+        today,
+        trainee_name,
+    )
+
+    title_col, action_col = st.columns([1.55, 1])
+
+    with title_col:
+        st.markdown(
+            """
+            <div class="dashboard-toolbar">
+                <div>
+                    <div class="dashboard-title">역량 진단 대시보드</div>
+                    <div class="dashboard-subtitle">
+                        입력하신 점수와 회고가 한눈에 정리되었습니다.
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with action_col:
+        save_col, print_col, reset_col = st.columns([1.45, 0.8, 1])
+
+        with save_col:
+            with st.popover("⇩  이미지/PDF 저장", use_container_width=True):
+                st.download_button(
+                    "PDF 리포트 다운로드",
+                    data=pdf_bytes,
+                    file_name="역량진단_회고리포트.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+
+                st.download_button(
+                    "PNG 요약 이미지 다운로드",
+                    data=image_bytes,
+                    file_name="역량진단_대시보드.png",
+                    mime="image/png",
+                    use_container_width=True,
+                )
+
+        with print_col:
+            if st.button("▣  인쇄", use_container_width=True):
+                components.html(
+                    """
+                    <script>
+                    window.parent.print();
+                    </script>
+                    """,
+                    height=0,
+                )
+
+        with reset_col:
+            if st.button("↻  다시 작성", use_container_width=True):
+                reset_all()
+                st.rerun()
+
     st.markdown('<div class="report-shell">', unsafe_allow_html=True)
 
     st.markdown(
@@ -1000,10 +1465,3 @@ elif st.session_state.page == "report":
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    left, right = st.columns([1, 3])
-
-    with left:
-        if st.button("← 다시 수정하기", use_container_width=True):
-            go_to("score")

@@ -353,6 +353,71 @@ st.markdown(
         margin-bottom: 2px;
     }
 
+
+    .reflection-card {
+        background: white;
+        border: 1px solid #DFE5EF;
+        border-radius: 20px;
+        padding: 28px 30px 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 8px 22px rgba(30, 41, 59, 0.08);
+    }
+
+    .reflection-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .reflection-meta {
+        flex: 1;
+    }
+
+    .reflection-title {
+        color: #273044;
+        font-size: 1.05rem;
+        font-weight: 900;
+        margin-bottom: 6px;
+    }
+
+    .reflection-subtitle {
+        color: #748099;
+        font-size: 0.88rem;
+        line-height: 1.5;
+    }
+
+    .char-count {
+        text-align: right;
+        color: #9AA6BA;
+        font-size: 0.88rem;
+        font-weight: 700;
+        margin-top: 6px;
+    }
+
+    div[data-testid="stTextArea"] textarea {
+        min-height: 120px !important;
+        border-radius: 16px !important;
+        border: 1px solid #DDE3ED !important;
+        background: #F8FAFD !important;
+        color: #273044 !important;
+        font-size: 0.95rem !important;
+        line-height: 1.65 !important;
+        padding: 18px 20px !important;
+        resize: none !important;
+        box-shadow: none !important;
+    }
+
+    div[data-testid="stTextArea"] textarea:focus {
+        border-color: #4F67E8 !important;
+        box-shadow: 0 0 0 3px rgba(79, 103, 232, 0.10) !important;
+    }
+
+    div[data-testid="stTextArea"] textarea::placeholder {
+        color: #A3AEC0 !important;
+        opacity: 1 !important;
+    }
+
     /* 모바일 */
     @media (max-width: 700px) {
         .block-container {
@@ -699,7 +764,7 @@ if st.session_state.active_tab == "score":
         st.markdown(
             f"""
             <div class="constellation-wrap">
-                <div class="result-heading">나의 역량 별모</div>
+                <div class="result-heading">나의 역량 별모양</div>
                 <div class="result-subheading">
                     전체 평균 {average:.1f}점 · 5점 만점
                 </div>
@@ -756,39 +821,71 @@ else:
 
     st.markdown(
         """
-        <div class="section-title">한 줄 회고</div>
+        <div class="section-title">과정별 한 줄 회고</div>
         <div class="section-description">
-            각 역량과 관련하여 연수 과정에서 배운 점이나 느낀 점을
-            한 문장으로 작성해 주세요.
+            각 과정의 핵심 배움을 확인하고, 한 줄로 회고를 작성해주세요.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    for item in competencies:
+    reflection_prompts = {
+        "A": "AI 시대 교육의 본질과 내 역할 변화에 대해 한 줄로 남겨주세요.",
+        "B": "나만의 교육 가치관과 윤리적 기준에 대한 한 줄 회고를 적어주세요.",
+        "C": "데이터를 해석하고 수업 설계를 구성하며 배운 점을 적어주세요.",
+        "D": "도구 활용과 과정중심평가 설계에서 느낀 점을 적어주세요.",
+        "E": "팀 설계와 마이크로티칭 실행 과정에서 배운 점을 적어주세요.",
+        "F": "학습 데이터 분석과 환류 설계에 대한 한 줄 회고를 적어주세요.",
+    }
 
-        st.markdown('<div class="competency-card">', unsafe_allow_html=True)
+    reflection_subtitles = {
+        "A": "AI 시대 교육 방향·역할 매트릭스",
+        "B": "가치관 선언문·윤리 체크리스트",
+        "C": "데이터 해석·수업 설계 구조",
+        "D": "도구 활용·과정중심평가 설계",
+        "E": "팀 설계·마이크로티칭 실행",
+        "F": "학습 데이터 분석·환류 설계",
+    }
+
+    for item in competencies:
+        key = f"reflection_{item['code']}"
+
+        st.markdown('<div class="reflection-card">', unsafe_allow_html=True)
 
         st.markdown(
             f"""
-            <div class="card-info" style="margin-bottom:16px;">
+            <div class="reflection-header">
                 <div class="letter-box" style="background:{item['color']};">
                     {item['code']}
                 </div>
-                <div>
-                    <div class="competency-title">{item['title']}</div>
-                    <div class="competency-desc">{item['description']}</div>
+                <div class="reflection-meta">
+                    <div class="reflection-title">{item['title']}</div>
+                    <div class="reflection-subtitle">
+                        {reflection_subtitles[item['code']]}
+                    </div>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.text_input(
+        reflection_value = st.text_area(
             f"{item['title']} 회고",
-            placeholder="이번 과정에서 배운 점을 한 줄로 작성해 주세요.",
-            key=f"reflection_{item['code']}",
+            value=st.session_state.get(key, ""),
+            placeholder=reflection_prompts[item["code"]],
+            max_chars=120,
+            height=120,
+            key=key,
             label_visibility="collapsed",
+        )
+
+        st.markdown(
+            f"""
+            <div class="char-count">
+                {len(reflection_value)} / 120
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
         st.markdown("</div>", unsafe_allow_html=True)

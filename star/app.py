@@ -841,7 +841,7 @@ st.markdown(
 
     .report-header {
         display: flex;
-        justify-content: space-between;
+        justify-content: flex-start;
         align-items: center;
         padding-bottom: 20px;
         border-bottom: 1px solid #E8EDF4;
@@ -1465,7 +1465,6 @@ elif st.session_state.page == "report":
                 <div class="report-title">역량 진단 및 한 줄 회고 리포트</div>
                 <div class="report-date">{today} · {trainee_name}</div>
             </div>
-            <div class="report-avatar">R</div>
         </div>
         """,
         unsafe_allow_html=True,

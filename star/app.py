@@ -523,7 +523,7 @@ st.markdown(
     }
 
     .block-container {
-        max-width: 1080px;
+        max-width: 1280px;
         padding-top: 24px;
         padding-bottom: 70px;
     }
@@ -591,7 +591,7 @@ st.markdown(
         gap: 7px;
         align-items: center;
         font-size: 0.9rem;
-        font-weight: 700;
+        font-weight: 800;
         color: #61708A;
     }
 
@@ -629,6 +629,8 @@ st.markdown(
     }
 
     .stButton > button {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
         border-radius: 14px;
         min-height: 52px;
         font-size: 0.96rem;
@@ -657,6 +659,41 @@ st.markdown(
         border-color: #E9EDF5 !important;
         color: #A8B2C4 !important;
         box-shadow: none !important;
+    }
+
+    /* 대시보드 상단 저장 버튼: 한 줄 + 파란색 강조 */
+    div[data-testid="stPopover"] > button {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        min-height: 52px !important;
+        padding-left: 18px !important;
+        padding-right: 18px !important;
+        background: var(--primary) !important;
+        color: #FFFFFF !important;
+        border-color: var(--primary) !important;
+        font-size: 0.91rem !important;
+        font-weight: 800 !important;
+        box-shadow: 0 8px 18px rgba(79,103,232,0.20) !important;
+    }
+
+    div[data-testid="stPopover"] > button:hover {
+        background: #4259D6 !important;
+        color: #FFFFFF !important;
+        border-color: #4259D6 !important;
+    }
+
+    div[data-testid="stDownloadButton"] > button {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+    }
+
+    /* 상단 작업 버튼의 글자를 한 줄로 유지 */
+    .dashboard-actions .stButton > button {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        font-size: 0.90rem !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
     }
 
     div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -1338,7 +1375,7 @@ elif st.session_state.page == "report":
         trainee_name,
     )
 
-    title_col, action_col = st.columns([1.4, 1.2])
+    title_col, action_col = st.columns([1.35, 1.65], gap="large")
 
     with title_col:
         st.markdown(
@@ -1356,7 +1393,7 @@ elif st.session_state.page == "report":
         )
 
     with action_col:
-        save_col, print_col, reset_col = st.columns([2.2, 1, 1])
+        save_col, print_col, reset_col = st.columns([1.75, 0.95, 1.25], gap="small")
 
         with save_col:
             with st.popover("⇩  이미지/PDF 저장", use_container_width=True):
@@ -1397,7 +1434,7 @@ elif st.session_state.page == "report":
                         background: #FFFFFF;
                         color: #4B5568;
                         font-family: Arial, sans-serif;
-                        font-size: 15px;
+                        font-size: 14px;
                         font-weight: 700;
                         cursor: pointer;
                         box-shadow: 0 4px 10px rgba(30, 41, 59, 0.06);
@@ -1410,14 +1447,14 @@ elif st.session_state.page == "report":
                 </style>
 
                 <button class="print-button" onclick="window.parent.print();">
-                    🖨 인쇄
+                    ▣ 인쇄
                 </button>
                 """,
                 height=54,
             )
 
         with reset_col:
-            if st.button("↻  다시 작성", use_container_width=True):
+            if st.button("↻ 다시 작성", use_container_width=True):
                 reset_all()
                 st.rerun()
 

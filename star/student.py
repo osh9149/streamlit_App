@@ -355,12 +355,12 @@ st.markdown(
 
 
     .reflection-card {
-        background: white;
-        border: 1px solid #DFE5EF;
+        background: #FFFFFF;
+        border: 1px solid #DDE4EE;
         border-radius: 20px;
-        padding: 28px 30px 24px;
+        padding: 28px 30px 22px;
         margin-bottom: 24px;
-        box-shadow: 0 8px 22px rgba(30, 41, 59, 0.08);
+        box-shadow: 0 10px 24px rgba(30, 41, 59, 0.08);
     }
 
     .reflection-header {
@@ -372,13 +372,14 @@ st.markdown(
 
     .reflection-meta {
         flex: 1;
+        min-width: 0;
     }
 
     .reflection-title {
         color: #273044;
         font-size: 1.05rem;
         font-weight: 900;
-        margin-bottom: 6px;
+        margin-bottom: 5px;
     }
 
     .reflection-subtitle {
@@ -392,30 +393,62 @@ st.markdown(
         color: #9AA6BA;
         font-size: 0.88rem;
         font-weight: 700;
-        margin-top: 6px;
+        margin-top: 8px;
+        padding-right: 2px;
+    }
+
+    /* 텍스트 영역 바깥 여백 제거 */
+    div[data-testid="stTextArea"] {
+        margin: 0 !important;
+    }
+
+    div[data-testid="stTextArea"] > div {
+        margin: 0 !important;
     }
 
     div[data-testid="stTextArea"] textarea {
         min-height: 120px !important;
+        height: 120px !important;
         border-radius: 16px !important;
-        border: 1px solid #DDE3ED !important;
+        border: 1px solid #D8E0EB !important;
         background: #F8FAFD !important;
         color: #273044 !important;
-        font-size: 0.95rem !important;
+        font-size: 0.96rem !important;
         line-height: 1.65 !important;
-        padding: 18px 20px !important;
+        padding: 18px 20px 34px 20px !important;
         resize: none !important;
         box-shadow: none !important;
     }
 
     div[data-testid="stTextArea"] textarea:focus {
         border-color: #4F67E8 !important;
-        box-shadow: 0 0 0 3px rgba(79, 103, 232, 0.10) !important;
+        box-shadow: 0 0 0 2px rgba(79, 103, 232, 0.10) !important;
+        outline: none !important;
     }
 
     div[data-testid="stTextArea"] textarea::placeholder {
         color: #A3AEC0 !important;
         opacity: 1 !important;
+    }
+
+    /* Streamlit 기본 글자수 표시 숨김 */
+    div[data-testid="stTextArea"] small {
+        display: none !important;
+    }
+
+    @media (max-width: 700px) {
+        .reflection-card {
+            padding: 22px 18px 18px;
+        }
+
+        .reflection-header {
+            gap: 12px;
+        }
+
+        div[data-testid="stTextArea"] textarea {
+            min-height: 110px !important;
+            height: 110px !important;
+        }
     }
 
     /* 모바일 */
@@ -764,7 +797,7 @@ if st.session_state.active_tab == "score":
         st.markdown(
             f"""
             <div class="constellation-wrap">
-                <div class="result-heading">나의 역량 별모양</div>
+                <div class="result-heading">나의 역량 별자리</div>
                 <div class="result-subheading">
                     전체 평균 {average:.1f}점 · 5점 만점
                 </div>
@@ -850,45 +883,46 @@ else:
     for item in competencies:
         key = f"reflection_{item['code']}"
 
-        st.markdown('<div class="reflection-card">', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="reflection-card">', unsafe_allow_html=True)
 
-        st.markdown(
-            f"""
-            <div class="reflection-header">
-                <div class="letter-box" style="background:{item['color']};">
-                    {item['code']}
-                </div>
-                <div class="reflection-meta">
-                    <div class="reflection-title">{item['title']}</div>
-                    <div class="reflection-subtitle">
-                        {reflection_subtitles[item['code']]}
+            st.markdown(
+                f"""
+                <div class="reflection-header">
+                    <div class="letter-box" style="background:{item['color']};">
+                        {item['code']}
+                    </div>
+                    <div class="reflection-meta">
+                        <div class="reflection-title">{item['title']}</div>
+                        <div class="reflection-subtitle">
+                            {reflection_subtitles[item['code']]}
+                        </div>
                     </div>
                 </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+                """,
+                unsafe_allow_html=True,
+            )
 
-        reflection_value = st.text_area(
-            f"{item['title']} 회고",
-            value=st.session_state.get(key, ""),
-            placeholder=reflection_prompts[item["code"]],
-            max_chars=120,
-            height=120,
-            key=key,
-            label_visibility="collapsed",
-        )
+            reflection_value = st.text_area(
+                f"{item['title']} 회고",
+                value=st.session_state.get(key, ""),
+                placeholder=reflection_prompts[item["code"]],
+                max_chars=120,
+                height=120,
+                key=key,
+                label_visibility="collapsed",
+            )
 
-        st.markdown(
-            f"""
-            <div class="char-count">
-                {len(reflection_value)} / 120
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            st.markdown(
+                f"""
+                <div class="char-count">
+                    {len(reflection_value)} / 120
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-        st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
     if st.button(
         "회고 작성 완료",

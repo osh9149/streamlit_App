@@ -1043,7 +1043,6 @@ if st.session_state.page != "report":
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="tab-shell">', unsafe_allow_html=True)
     tab1, tab2 = st.columns(2)
 
     with tab1:

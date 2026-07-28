@@ -1036,7 +1036,7 @@ if st.session_state.page != "report":
         <div class="top-title">연수과정 돌아보기</div>
         <div class="top-desc">
             연수를 지나오며 내가 느낀 성장의 깊이를 점수로 표현해보고,
-            과정별 배움을 한 줄 회고로 남겨보세요.
+            과정별 배움을 한 줄 회고로 남겨보세요.<br>
             모든 작성이 끝나면 나만의 회고 대시보드와 카드가 완성됩니다.
         </div>
         """,

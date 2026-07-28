@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go
+from datetime import datetime
 
 # =========================================================
 # 페이지 설정
@@ -7,20 +8,20 @@ import plotly.graph_objects as go
 st.set_page_config(
     page_title="연수과정 돌아보기",
     page_icon="📋",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 # =========================================================
-# 데이터
+# 역량 데이터
 # =========================================================
-competencies = [
+COMPETENCIES = [
     {
         "code": "A",
         "icon": "①",
         "title": "본질 이해",
         "subtitle": "AI 시대 교육 방향·역할 매트릭스",
-        "description": "AI 시대 교육의 본질과 역할을 이해하는 역량",
+        "description": "도구가 아닌 교육의 본질과 교사의 역할을 이해하는 역량",
         "prompt": "AI 시대 교육의 본질과 내 역할 변화에 대해 한 줄로 남겨주세요.",
         "color": "#4F67E8",
     },
@@ -29,44 +30,44 @@ competencies = [
         "icon": "②③",
         "title": "가치관·윤리",
         "subtitle": "가치관 선언문·윤리 체크리스트",
-        "description": "가치관 선언과 윤리적 기준을 세우는 역량",
+        "description": "나만의 교육 가치관과 윤리적 기준을 세우는 역량",
         "prompt": "나만의 교육 가치관과 윤리적 기준에 대한 한 줄 회고를 적어주세요.",
         "color": "#5BA4E6",
     },
     {
         "code": "C",
-        "icon": "④",
+        "icon": "④⑤",
         "title": "데이터·설계",
-        "subtitle": "데이터 해석·수업 설계 구조",
+        "subtitle": "데이터 해석·수업설계 뼈대",
         "description": "데이터를 해석하고 수업 설계 뼈대를 세우는 역량",
         "prompt": "데이터를 해석하고 수업 설계를 구성하며 배운 점을 적어주세요.",
         "color": "#62B8A9",
     },
     {
         "code": "D",
-        "icon": "⑤",
+        "icon": "⑥⑦",
         "title": "도구·평가",
-        "subtitle": "도구 활용·과정중심평가 설계",
+        "subtitle": "도구 맥락 활용·과정중심평가 설계",
         "description": "도구를 맥락에 맞게 활용하고 과정중심평가를 설계하는 역량",
         "prompt": "도구 활용과 과정중심평가 설계에서 느낀 점을 적어주세요.",
         "color": "#6861EF",
     },
     {
         "code": "E",
-        "icon": "⑥",
+        "icon": "⑧⑨⑩",
         "title": "집합 실행",
         "subtitle": "팀 설계·마이크로티칭 실행",
         "description": "팀을 설계하고 마이크로티칭을 실행하는 역량",
-        "prompt": "팀 설계와 마이크로티칭 실행 과정에서 배운 점을 적어주세요.",
+        "prompt": "팀 설계와 마이크로티칭 실행 과정에서 깨달은 점을 한 줄로 적어주세요.",
         "color": "#8558F4",
     },
     {
         "code": "F",
-        "icon": "⑦",
+        "icon": "⑪⑫",
         "title": "분석·환류",
-        "subtitle": "학습 데이터 분석·환류 설계",
+        "subtitle": "학습데이터 분석·환류 설계",
         "description": "학습 데이터를 분석하고 환류를 설계하는 역량",
-        "prompt": "학습 데이터 분석과 환류 설계에 대한 한 줄 회고를 적어주세요.",
+        "prompt": "학습 데이터 분석과 환류 설계의 의미를 한 줄 회고로 작성해주세요.",
         "color": "#4B9C8F",
     },
 ]
@@ -74,14 +75,91 @@ competencies = [
 # =========================================================
 # 세션 상태
 # =========================================================
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = "score"
+defaults = {
+    "page": "score",
+    "scores": {},
+    "name": "",
+}
 
-if "scores" not in st.session_state:
-    st.session_state.scores = {}
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
-if "show_result" not in st.session_state:
-    st.session_state.show_result = False
+# =========================================================
+# 유틸리티
+# =========================================================
+def score_count():
+    return len(st.session_state.scores)
+
+
+def reflection_count():
+    return sum(
+        1
+        for item in COMPETENCIES
+        if st.session_state.get(f"reflection_{item['code']}", "").strip()
+    )
+
+
+def all_complete():
+    return score_count() == 6 and reflection_count() == 6
+
+
+def go_to(page_name):
+    st.session_state.page = page_name
+    st.rerun()
+
+
+def build_radar_chart():
+    labels = [item["title"] for item in COMPETENCIES]
+    values = [st.session_state.scores.get(item["code"], 0) for item in COMPETENCIES]
+
+    closed_labels = labels + [labels[0]]
+    closed_values = values + [values[0]]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatterpolar(
+            r=closed_values,
+            theta=closed_labels,
+            fill="toself",
+            fillcolor="rgba(79,103,232,0.16)",
+            line=dict(color="#4F67E8", width=3),
+            marker=dict(
+                size=8,
+                color="#4F67E8",
+                line=dict(color="#FFFFFF", width=1),
+            ),
+            hovertemplate="%{theta}: %{r}점<extra></extra>",
+            showlegend=False,
+        )
+    )
+
+    fig.update_layout(
+        height=470,
+        margin=dict(l=70, r=70, t=50, b=50),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#273044"),
+        polar=dict(
+            bgcolor="rgba(0,0,0,0)",
+            radialaxis=dict(
+                visible=True,
+                range=[0, 5],
+                tickvals=[1, 2, 3, 4, 5],
+                tickfont=dict(color="#9AA6BA", size=10),
+                gridcolor="#E5EAF2",
+                linecolor="#E5EAF2",
+            ),
+            angularaxis=dict(
+                tickfont=dict(color="#273044", size=13),
+                gridcolor="#E5EAF2",
+                linecolor="#E5EAF2",
+            ),
+        ),
+    )
+    return fig
+
 
 # =========================================================
 # CSS
@@ -90,82 +168,131 @@ st.markdown(
     """
     <style>
     :root {
-        --page-bg: #F6F8FC;
-        --card-border: #DFE5EF;
-        --text-main: #202A3D;
-        --text-sub: #748099;
+        --bg: #F6F8FC;
+        --card: #FFFFFF;
+        --border: #DFE5EF;
+        --text: #202A3D;
+        --sub: #748099;
         --primary: #4F67E8;
     }
 
     .stApp {
-        background: var(--page-bg);
+        background: var(--bg);
     }
 
     .block-container {
-        max-width: 930px;
-        padding-top: 46px;
-        padding-bottom: 80px;
+        max-width: 1080px;
+        padding-top: 24px;
+        padding-bottom: 70px;
     }
 
     header, footer, #MainMenu {
         visibility: hidden;
     }
 
-    /* 상단 */
-    .top-icon-wrap {
-        display: flex;
-        justify-content: center;
-        margin-bottom: 20px;
+    .top-title {
+        text-align: center;
+        font-size: 2.25rem;
+        font-weight: 900;
+        color: #172033;
+        letter-spacing: -0.04em;
+        margin-top: 8px;
+        margin-bottom: 10px;
+    }
+
+    .top-desc {
+        max-width: 680px;
+        margin: 0 auto 30px auto;
+        text-align: center;
+        color: #6E7B92;
+        line-height: 1.75;
+        font-size: 1rem;
     }
 
     .top-icon {
-        width: 70px;
-        height: 70px;
-        border-radius: 18px;
+        width: 58px;
+        height: 58px;
+        margin: 0 auto 18px;
+        border-radius: 16px;
         background: var(--primary);
         display: flex;
-        align-items: center;
         justify-content: center;
+        align-items: center;
         color: white;
-        font-size: 32px;
-        box-shadow: 0 12px 24px rgba(79, 103, 232, 0.22);
+        font-size: 29px;
+        box-shadow: 0 10px 22px rgba(79,103,232,0.22);
     }
 
-    .page-title {
-        text-align: center;
-        color: #19233A;
-        font-size: 2.15rem;
-        font-weight: 900;
-        letter-spacing: -0.04em;
-        margin-bottom: 12px;
-    }
-
-    .page-description {
-        max-width: 650px;
-        margin: 0 auto 44px;
-        color: #66728A;
-        text-align: center;
-        font-size: 1rem;
-        line-height: 1.85;
-    }
-
-    /* 탭 */
     .tab-shell {
         background: #FFFFFF;
-        border: 1px solid var(--card-border);
+        border: 1px solid var(--border);
         border-radius: 18px;
         padding: 8px;
-        box-shadow: 0 8px 20px rgba(30, 41, 59, 0.08);
+        box-shadow: 0 8px 20px rgba(30,41,59,0.08);
         margin-bottom: 28px;
+    }
+
+    .status-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #FFFFFF;
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        padding: 14px 18px;
+        box-shadow: 0 7px 18px rgba(30,41,59,0.07);
+        margin-bottom: 30px;
+    }
+
+    .status-left {
+        display: flex;
+        gap: 7px;
+        align-items: center;
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #61708A;
+    }
+
+    .status-right {
+        border-left: 1px solid #E5EAF2;
+        padding-left: 18px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #61708A;
+    }
+
+    .step-dot {
+        width: 27px;
+        height: 9px;
+        border-radius: 999px;
+        background: #E4E9F2;
+        display: inline-block;
+    }
+
+    .step-dot.active {
+        background: var(--primary);
+    }
+
+    .section-title {
+        color: var(--text);
+        font-size: 1.25rem;
+        font-weight: 900;
+        margin-bottom: 8px;
+    }
+
+    .section-desc {
+        color: #71809A;
+        font-size: 0.94rem;
+        margin-bottom: 24px;
     }
 
     .stButton > button {
         border-radius: 14px;
-        min-height: 54px;
-        font-size: 0.98rem;
+        min-height: 52px;
+        font-size: 0.96rem;
         font-weight: 800;
         border: 1px solid #DDE3ED;
-        background: #F9FAFC;
+        background: #FFFFFF;
         color: #4B5568;
         transition: all 0.18s ease;
     }
@@ -178,143 +305,81 @@ st.markdown(
 
     .stButton > button[kind="primary"] {
         background: var(--primary);
-        color: #FFFFFF;
+        color: white;
         border-color: var(--primary);
-        box-shadow: 0 8px 18px rgba(79, 103, 232, 0.20);
+        box-shadow: 0 8px 18px rgba(79,103,232,0.20);
     }
 
-    /* 진행 상태 */
-    .status-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: #FFFFFF;
-        border: 1px solid var(--card-border);
-        border-radius: 15px;
-        padding: 14px 20px;
-        box-shadow: 0 7px 18px rgba(30, 41, 59, 0.07);
-        margin-bottom: 34px;
+    .stButton > button:disabled {
+        background: #E9EDF5 !important;
+        border-color: #E9EDF5 !important;
+        color: #A8B2C4 !important;
+        box-shadow: none !important;
     }
 
-    .status-left {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #60708B;
-        font-size: 0.93rem;
-        font-weight: 700;
-    }
-
-    .step-dot {
-        width: 29px;
-        height: 10px;
-        border-radius: 999px;
-        background: #E4E9F2;
-        display: inline-block;
-    }
-
-    .step-dot.active {
-        background: var(--primary);
-    }
-
-    .status-right {
-        padding-left: 18px;
-        border-left: 2px solid #E4E9F2;
-        color: #60708B;
-        font-size: 0.93rem;
-        font-weight: 700;
-    }
-
-    /* 섹션 제목 */
-    .section-title {
-        color: var(--text-main);
-        font-size: 1.25rem;
-        font-weight: 900;
-        margin-bottom: 8px;
-    }
-
-    .section-description {
-        color: #71809A;
-        font-size: 0.95rem;
-        margin-bottom: 28px;
-    }
-
-    /* st.container(border=True)를 카드로 사용 */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background: #FFFFFF;
-        border: 1px solid var(--card-border) !important;
+        border: 1px solid var(--border) !important;
         border-radius: 20px !important;
-        box-shadow: 0 9px 24px rgba(30, 41, 59, 0.08);
-        padding: 0 !important;
-        margin-bottom: 24px;
+        box-shadow: 0 9px 24px rgba(30,41,59,0.08);
+        margin-bottom: 22px;
         overflow: hidden;
     }
 
     div[data-testid="stVerticalBlockBorderWrapper"] > div {
-        padding: 26px 30px 22px !important;
+        padding: 24px 26px 20px !important;
     }
 
-    /* 카드 헤더 */
+    .score-info,
     .reflection-header {
         display: flex;
         align-items: center;
-        gap: 16px;
-        margin-bottom: 17px;
+        gap: 15px;
     }
 
-    .reflection-icon {
-        width: 55px;
-        height: 55px;
+    .badge {
+        width: 54px;
+        height: 54px;
         border-radius: 14px;
-        color: #FFFFFF;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.94rem;
+        color: #FFFFFF;
+        font-size: 0.96rem;
         font-weight: 900;
         flex-shrink: 0;
     }
 
-    .reflection-meta {
-        min-width: 0;
-    }
-
-    .reflection-title {
+    .item-title {
         color: #273044;
-        font-size: 1.06rem;
+        font-size: 1.05rem;
         font-weight: 900;
-        margin-bottom: 5px;
+        margin-bottom: 4px;
     }
 
-    .reflection-subtitle {
+    .item-sub {
         color: #748099;
-        font-size: 0.88rem;
+        font-size: 0.86rem;
         line-height: 1.45;
     }
 
-    /* 회고 입력창 */
-    div[data-testid="stTextArea"] {
-        margin: 0 !important;
-    }
-
     div[data-testid="stTextArea"] textarea {
-        min-height: 90px !important;
-        height: 90px !important;
+        min-height: 80px !important;
+        height: 80px !important;
         border-radius: 15px !important;
         border: 1px solid #DCE3ED !important;
         background: #F8FAFD !important;
         color: #273044 !important;
-        font-size: 0.96rem !important;
-        line-height: 1.65 !important;
-        padding: 17px 19px !important;
+        padding: 16px 18px !important;
         resize: none !important;
         box-shadow: none !important;
+        font-size: 0.95rem !important;
+        line-height: 1.6 !important;
     }
 
     div[data-testid="stTextArea"] textarea:focus {
         border-color: var(--primary) !important;
-        box-shadow: 0 0 0 2px rgba(79, 103, 232, 0.10) !important;
-        outline: none !important;
+        box-shadow: 0 0 0 2px rgba(79,103,232,0.10) !important;
     }
 
     div[data-testid="stTextArea"] textarea::placeholder {
@@ -322,7 +387,6 @@ st.markdown(
         opacity: 1 !important;
     }
 
-    /* Streamlit 기본 글자 수 숨김 */
     div[data-testid="stTextArea"] small {
         display: none !important;
     }
@@ -330,100 +394,238 @@ st.markdown(
     .char-count {
         text-align: right;
         color: #9AA6BA;
-        font-size: 0.88rem;
+        font-size: 0.86rem;
         font-weight: 700;
-        margin-top: 7px;
+        margin-top: 5px;
     }
 
-    /* 점수 카드 */
-    .score-info {
+    .report-shell {
+        background: #FFFFFF;
+        border: 1px solid #E1E7F0;
+        border-radius: 28px;
+        box-shadow: 0 14px 36px rgba(30,41,59,0.10);
+        padding: 32px;
+        margin-top: 8px;
+    }
+
+    .report-header {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 16px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #E8EDF4;
+        margin-bottom: 26px;
     }
 
-    .score-title {
-        color: #273044;
-        font-size: 1.05rem;
+    .report-title {
+        font-size: 1.15rem;
         font-weight: 900;
+        color: #172033;
         margin-bottom: 5px;
     }
 
-    .score-desc {
-        color: #748099;
+    .report-date {
+        color: #8A96AA;
+        font-size: 0.82rem;
+    }
+
+    .report-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        background: #EEF3FF;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--primary);
+        font-size: 1.35rem;
+        font-weight: 900;
+    }
+
+    .metric-card {
+        background: #FFFFFF;
+        border: 1px solid #E6EBF3;
+        border-radius: 17px;
+        padding: 18px 16px;
+        box-shadow: 0 7px 16px rgba(30,41,59,0.07);
+        min-height: 88px;
+    }
+
+    .metric-label {
+        color: #71809A;
+        font-size: 0.78rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+
+    .metric-value {
+        color: #172033;
+        font-size: 1.65rem;
+        font-weight: 900;
+    }
+
+    .metric-unit {
+        color: #9AA6BA;
+        font-size: 0.8rem;
+        margin-left: 3px;
+    }
+
+    .panel {
+        background: #FFFFFF;
+        border: 1px solid #E6EBF3;
+        border-radius: 18px;
+        padding: 20px;
+        height: 100%;
+    }
+
+    .panel-title {
+        color: #273044;
+        font-size: 0.92rem;
+        font-weight: 900;
+        margin-bottom: 12px;
+    }
+
+    .strength-card,
+    .growth-card {
+        border-radius: 16px;
+        padding: 18px;
+        margin-bottom: 14px;
+    }
+
+    .strength-card {
+        background: #EEF5FF;
+    }
+
+    .growth-card {
+        background: #FFF8E9;
+    }
+
+    .small-label {
+        font-size: 0.8rem;
+        font-weight: 900;
+        margin-bottom: 10px;
+    }
+
+    .strength-card .small-label {
+        color: #4F67E8;
+    }
+
+    .growth-card .small-label {
+        color: #D88A00;
+    }
+
+    .score-row {
+        display: grid;
+        grid-template-columns: 92px 1fr 24px;
+        align-items: center;
+        gap: 10px;
+        margin: 10px 0;
+        font-size: 0.82rem;
+        color: #42506A;
+    }
+
+    .score-bar {
+        height: 9px;
+        background: #EDF1F7;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .score-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: var(--primary);
+    }
+
+    .reflection-grid-title {
+        border-left: 4px solid var(--primary);
+        padding-left: 10px;
+        color: #273044;
+        font-size: 1rem;
+        font-weight: 900;
+        margin: 32px 0 18px;
+    }
+
+    .reflection-report-card {
+        background: #FFFFFF;
+        border: 1px solid #E1E7F0;
+        border-radius: 18px;
+        padding: 18px;
+        margin-bottom: 14px;
+        min-height: 150px;
+        position: relative;
+        box-shadow: 0 5px 14px rgba(30,41,59,0.05);
+        overflow: hidden;
+    }
+
+    .reflection-report-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 5px;
+        background: var(--accent);
+    }
+
+    .reflection-report-head {
+        display: flex;
+        gap: 11px;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .mini-badge {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.8rem;
+        font-weight: 900;
+        background: var(--accent);
+    }
+
+    .reflection-text {
+        background: #F8FAFD;
+        border-radius: 12px;
+        padding: 14px;
+        color: #536179;
         font-size: 0.88rem;
-        line-height: 1.5;
+        min-height: 55px;
+        line-height: 1.55;
     }
 
-    /* 결과 */
-    .constellation-wrap {
-        background: #080B16;
-        border: 1px solid #1D2436;
-        border-radius: 22px;
-        padding: 18px 18px 22px;
+    .report-footer {
+        text-align: center;
+        color: #9AA6BA;
+        font-size: 0.78rem;
+        padding-top: 24px;
         margin-top: 24px;
-        box-shadow: 0 14px 34px rgba(8, 11, 22, 0.22);
+        border-top: 1px solid #E8EDF4;
     }
 
-    .result-heading {
-        text-align: center;
-        color: #FFFFFF;
-        font-size: 1.25rem;
-        font-weight: 900;
-        margin: 6px 0 2px;
-    }
-
-    .result-subheading {
-        text-align: center;
-        color: #A8B0C3;
-        font-size: 0.87rem;
-    }
-
-    .analysis-card {
-        background: #101421;
-        border: 1px dashed #2B3245;
-        border-radius: 13px;
-        padding: 17px 20px;
-        margin-top: 8px;
-        color: #F8FAFC;
-        line-height: 1.75;
-        font-size: 0.98rem;
-    }
-
-    .analysis-strength {
-        color: #FFD166;
-        font-weight: 900;
-    }
-
-    .analysis-growth {
-        color: #FF6B8A;
-        font-weight: 900;
-    }
-
-    @media (max-width: 700px) {
+    @media (max-width: 760px) {
         .block-container {
-            padding: 24px 14px 60px;
+            padding: 16px 12px 50px;
         }
 
-        .page-title {
-            font-size: 1.75rem;
-        }
-
-        .page-description {
-            font-size: 0.92rem;
+        .top-title {
+            font-size: 1.8rem;
         }
 
         .step-dot {
-            width: 18px;
+            width: 17px;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"] > div {
-            padding: 22px 18px 18px !important;
+            padding: 20px 17px 16px !important;
         }
 
-        .reflection-icon {
-            width: 50px;
-            height: 50px;
+        .report-shell {
+            padding: 18px;
         }
     }
     </style>
@@ -432,113 +634,94 @@ st.markdown(
 )
 
 # =========================================================
-# 상단 영역
+# 공통 상단
 # =========================================================
-st.markdown(
-    """
-    <div class="top-icon-wrap">
+if st.session_state.page != "report":
+    st.markdown(
+        """
         <div class="top-icon">✓</div>
-    </div>
-    <div class="page-title">연수과정 돌아보기</div>
-    <div class="page-description">
-        이번 연수를 지나오며 내가 느낀 성장의 깊이를 점수로 표현해보고,
-        과정별 배움을 한 줄 회고로 남겨보세요.
-        모든 작성이 끝나면 나만의 회고 대시보드와 카드가 완성됩니다.
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# =========================================================
-# 탭
-# =========================================================
-st.markdown('<div class="tab-shell">', unsafe_allow_html=True)
-tab1, tab2 = st.columns(2)
-
-with tab1:
-    if st.button(
-        "▥  역량 점수 평가",
-        use_container_width=True,
-        type="primary" if st.session_state.active_tab == "score" else "secondary",
-    ):
-        st.session_state.active_tab = "score"
-        st.rerun()
-
-with tab2:
-    if st.button(
-        "✎  한 줄 회고",
-        use_container_width=True,
-        type="primary" if st.session_state.active_tab == "reflection" else "secondary",
-    ):
-        st.session_state.active_tab = "reflection"
-        st.rerun()
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-# =========================================================
-# 진행률
-# =========================================================
-score_count = len(st.session_state.scores)
-reflection_count = sum(
-    1
-    for item in competencies
-    if st.session_state.get(f"reflection_{item['code']}", "").strip()
-)
-
-dots = ""
-current_count = score_count if st.session_state.active_tab == "score" else reflection_count
-
-for i in range(6):
-    active = "active" if i < current_count else ""
-    dots += f'<span class="step-dot {active}"></span>'
-
-st.markdown(
-    f"""
-    <div class="status-card">
-        <div class="status-left">
-            {dots}
-            <span style="margin-left:4px;">
-                {'역량' if st.session_state.active_tab == 'score' else '회고'}
-                {current_count}/6
-            </span>
+        <div class="top-title">연수과정 돌아보기</div>
+        <div class="top-desc">
+            이번 연수를 지나오며 내가 느낀 성장의 깊이를 점수로 표현해보고,
+            과정별 배움을 한 줄 회고로 남겨보세요.
+            모든 작성이 끝나면 나만의 회고 대시보드와 카드가 완성됩니다.
         </div>
-        <div class="status-right">
-            {'회고' if st.session_state.active_tab == 'score' else '역량'}
-            {reflection_count if st.session_state.active_tab == 'score' else score_count}/6
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="tab-shell">', unsafe_allow_html=True)
+    tab1, tab2 = st.columns(2)
+
+    with tab1:
+        if st.button(
+            "▥  역량 점수 평가",
+            use_container_width=True,
+            type="primary" if st.session_state.page == "score" else "secondary",
+        ):
+            go_to("score")
+
+    with tab2:
+        if st.button(
+            "✎  한 줄 회고",
+            use_container_width=True,
+            type="primary" if st.session_state.page == "reflection" else "secondary",
+        ):
+            go_to("reflection")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    current_count = score_count() if st.session_state.page == "score" else reflection_count()
+    current_label = "역량" if st.session_state.page == "score" else "회고"
+    other_count = reflection_count() if st.session_state.page == "score" else score_count()
+    other_label = "회고" if st.session_state.page == "score" else "역량"
+
+    dots = "".join(
+        f'<span class="step-dot {"active" if i < current_count else ""}"></span>'
+        for i in range(6)
+    )
+
+    st.markdown(
+        f"""
+        <div class="status-card">
+            <div class="status-left">
+                {dots}
+                <span style="margin-left:4px;">{current_label} {current_count}/6</span>
+            </div>
+            <div class="status-right">{other_label} {other_count}/6</div>
         </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+        """,
+        unsafe_allow_html=True,
+    )
 
 # =========================================================
-# 역량 점수 평가 탭
+# 1. 점수 평가
 # =========================================================
-if st.session_state.active_tab == "score":
+if st.session_state.page == "score":
     st.markdown(
         """
         <div class="section-title">역량 점수 평가</div>
-        <div class="section-description">
+        <div class="section-desc">
             각 역량 항목에 대해 1~5점을 선택해주세요. (1: 미흡 ~ 5: 최우수)
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    for item in competencies:
+    for item in COMPETENCIES:
         with st.container(border=True):
-            left, right = st.columns([1.35, 1])
+            left, right = st.columns([1.3, 1])
 
             with left:
                 st.markdown(
                     f"""
                     <div class="score-info">
-                        <div class="reflection-icon" style="background:{item['color']};">
+                        <div class="badge" style="background:{item['color']};">
                             {item['code']}
                         </div>
                         <div>
-                            <div class="score-title">{item['title']}</div>
-                            <div class="score-desc">{item['description']}</div>
+                            <div class="item-title">{item['title']}</div>
+                            <div class="item-sub">{item['description']}</div>
                         </div>
                     </div>
                     """,
@@ -546,171 +729,71 @@ if st.session_state.active_tab == "score":
                 )
 
             with right:
-                cols = st.columns(5)
+                score_cols = st.columns(6)
                 for score in range(1, 6):
-                    with cols[score - 1]:
+                    with score_cols[score - 1]:
                         selected = st.session_state.scores.get(item["code"]) == score
                         if st.button(
                             str(score),
-                            key=f"score_{item['code']}_{score}",
-                            type="primary" if selected else "secondary",
+                            key=f"{item['code']}_{score}",
                             use_container_width=True,
+                            type="primary" if selected else "secondary",
                         ):
                             st.session_state.scores[item["code"]] = score
-                            st.session_state.show_result = False
                             st.rerun()
 
-    if st.button("결과 보기", use_container_width=True, type="primary"):
-        if len(st.session_state.scores) < 6:
-            st.warning("6개 역량의 점수를 모두 선택해 주세요.")
-        else:
-            st.session_state.show_result = True
+                with score_cols[5]:
+                    current = st.session_state.scores.get(item["code"], "-")
+                    st.markdown(
+                        f"""
+                        <div style="
+                            height:52px;
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            color:#8994A8;
+                            font-weight:800;
+                        ">{current}</div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
-    if st.session_state.show_result:
-        average = sum(st.session_state.scores.values()) / 6
-        max_score = max(st.session_state.scores.values())
-        min_score = min(st.session_state.scores.values())
-
-        strengths = [
-            item for item in competencies
-            if st.session_state.scores[item["code"]] == max_score
-        ]
-        growths = [
-            item for item in competencies
-            if st.session_state.scores[item["code"]] == min_score
-        ]
-
-        strength_text = ", ".join(
-            f"{item['title']} ({max_score:.1f}점)" for item in strengths
-        )
-        growth_text = ", ".join(
-            f"{item['title']} ({min_score:.1f}점)" for item in growths
-        )
-
-        categories = [item["code"] for item in competencies]
-        scores = [st.session_state.scores[item["code"]] for item in competencies]
-
-        closed_categories = categories + [categories[0]]
-        closed_scores = scores + [scores[0]]
-
-        fig = go.Figure()
-
-        fig.add_trace(
-            go.Scatterpolar(
-                r=[5] * 7,
-                theta=closed_categories,
-                mode="lines",
-                line=dict(color="rgba(255,255,255,0.22)", width=1),
-                hoverinfo="skip",
-                showlegend=False,
-            )
-        )
-
-        fig.add_trace(
-            go.Scatterpolar(
-                r=closed_scores,
-                theta=closed_categories,
-                mode="lines+markers",
-                fill="toself",
-                fillcolor="rgba(91,176,255,0.22)",
-                line=dict(color="#69B8FF", width=3),
-                marker=dict(
-                    size=[14 if s == max_score else 8 for s in closed_scores],
-                    color=["#FFD166" if s == max_score else "#69B8FF" for s in closed_scores],
-                    symbol=["star" if s == max_score else "circle" for s in closed_scores],
-                    line=dict(color="#D8EEFF", width=1),
-                ),
-                text=[
-                    f"{item['code']} · {item['title']}: "
-                    f"{st.session_state.scores[item['code']]}점"
-                    for item in competencies
-                ] + [
-                    f"{competencies[0]['code']} · {competencies[0]['title']}: "
-                    f"{st.session_state.scores[competencies[0]['code']]}점"
-                ],
-                hovertemplate="%{text}<extra></extra>",
-                showlegend=False,
-            )
-        )
-
-        fig.update_layout(
-            height=430,
-            margin=dict(l=52, r=52, t=45, b=35),
-            paper_bgcolor="#080B16",
-            plot_bgcolor="#080B16",
-            font=dict(color="#F8FAFC", size=14),
-            polar=dict(
-                bgcolor="#080B16",
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 5.2],
-                    tickvals=[0, 1, 2, 3, 4, 5],
-                    gridcolor="rgba(255,255,255,0.10)",
-                    tickfont=dict(color="rgba(255,255,255,0.55)", size=10),
-                    angle=90,
-                ),
-                angularaxis=dict(
-                    tickfont=dict(color="#FFFFFF", size=14),
-                    gridcolor="rgba(255,255,255,0.13)",
-                    rotation=90,
-                    direction="clockwise",
-                ),
-            ),
-        )
-
-        st.markdown(
-            f"""
-            <div class="constellation-wrap">
-                <div class="result-heading">나의 역량 별자리</div>
-                <div class="result-subheading">전체 평균 {average:.1f}점 · 5점 만점</div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.plotly_chart(
-            fig,
+    _, nav_col = st.columns([3, 1])
+    with nav_col:
+        if st.button(
+            "회고 작성으로 이동  →",
             use_container_width=True,
-            config={"displayModeBar": False},
-        )
-
-        st.markdown(
-            f"""
-                <div class="analysis-card">
-                    🥇 <span class="analysis-strength">강점:</span> {strength_text}<br>
-                    🎯 <span class="analysis-growth">보완:</span> {growth_text}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            disabled=score_count() < 6,
+        ):
+            go_to("reflection")
 
 # =========================================================
-# 한 줄 회고 탭
+# 2. 한 줄 회고
 # =========================================================
-else:
+elif st.session_state.page == "reflection":
     st.markdown(
         """
         <div class="section-title">과정별 한 줄 회고</div>
-        <div class="section-description">
+        <div class="section-desc">
             각 과정의 핵심 배움을 확인하고, 한 줄로 회고를 작성해주세요.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    for item in competencies:
+    for item in COMPETENCIES:
         key = f"reflection_{item['code']}"
 
         with st.container(border=True):
             st.markdown(
                 f"""
                 <div class="reflection-header">
-                    <div class="reflection-icon" style="background:{item['color']};">
+                    <div class="badge" style="background:{item['color']};">
                         {item['icon']}
                     </div>
-                    <div class="reflection-meta">
-                        <div class="reflection-title">{item['title']}</div>
-                        <div class="reflection-subtitle">{item['subtitle']}</div>
+                    <div>
+                        <div class="item-title">{item['title']}</div>
+                        <div class="item-sub">{item['subtitle']}</div>
                     </div>
                 </div>
                 """,
@@ -722,7 +805,7 @@ else:
                 value=st.session_state.get(key, ""),
                 placeholder=item["prompt"],
                 max_chars=120,
-                height=90,
+                height=80,
                 key=key,
                 label_visibility="collapsed",
             )
@@ -732,18 +815,195 @@ else:
                 unsafe_allow_html=True,
             )
 
-    if st.button(
-        "회고 작성 완료",
-        use_container_width=True,
-        type="primary",
-    ):
-        completed = sum(
-            1
-            for item in competencies
-            if st.session_state.get(f"reflection_{item['code']}", "").strip()
+    back_col, _, final_col = st.columns([1.2, 2, 2.1])
+
+    with back_col:
+        if st.button("점수 평가로 이동", use_container_width=True):
+            go_to("score")
+
+    with final_col:
+        if st.button(
+            "최종 대시보드 및 회고 카드 확인하기  →",
+            use_container_width=True,
+            type="primary",
+            disabled=not all_complete(),
+        ):
+            go_to("report")
+
+# =========================================================
+# 3. 최종 리포트
+# =========================================================
+elif st.session_state.page == "report":
+    scores = [st.session_state.scores[item["code"]] for item in COMPETENCIES]
+    avg_score = sum(scores) / 6
+    total_score = sum(scores)
+
+    max_score = max(scores)
+    min_score = min(scores)
+
+    strength_items = [
+        item for item in COMPETENCIES
+        if st.session_state.scores[item["code"]] == max_score
+    ]
+    growth_items = [
+        item for item in COMPETENCIES
+        if st.session_state.scores[item["code"]] == min_score
+    ]
+
+    strength = strength_items[0]
+    growth = growth_items[0]
+
+    today = datetime.now().strftime("%Y년 %m월 %d일")
+    trainee_name = st.session_state.name.strip() or "연수생"
+
+    st.markdown('<div class="report-shell">', unsafe_allow_html=True)
+
+    st.markdown(
+        f"""
+        <div class="report-header">
+            <div>
+                <div class="report-title">역량 진단 및 한 줄 회고 리포트</div>
+                <div class="report-date">{today} · {trainee_name}</div>
+            </div>
+            <div class="report-avatar">R</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    metric_cols = st.columns(4)
+    metrics = [
+        ("평균 점수", f"{avg_score:.1f}", "/ 5"),
+        ("총점", str(total_score), "/ 30"),
+        ("역량 평가", str(score_count()), "/ 6 완료"),
+        ("한 줄 회고", str(reflection_count()), "/ 6 완료"),
+    ]
+
+    for col, (label, value, unit) in zip(metric_cols, metrics):
+        with col:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">{label}</div>
+                    <span class="metric-value">{value}</span>
+                    <span class="metric-unit">{unit}</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    chart_col, side_col = st.columns([1.35, 0.85])
+
+    with chart_col:
+        st.markdown('<div class="panel"><div class="panel-title">역량 방사형 차트</div>', unsafe_allow_html=True)
+        st.plotly_chart(
+            build_radar_chart(),
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with side_col:
+        st.markdown(
+            f"""
+            <div class="strength-card">
+                <div class="small-label">강점 역량</div>
+                <div class="reflection-report-head">
+                    <div class="badge" style="background:{strength['color']};">
+                        {strength['code']}
+                    </div>
+                    <div>
+                        <div class="item-title">{strength['title']}</div>
+                        <div class="item-sub">{max_score}점 · 최고 점수</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="growth-card">
+                <div class="small-label">보완 역량</div>
+                <div class="reflection-report-head">
+                    <div class="badge" style="background:{growth['color']};">
+                        {growth['code']}
+                    </div>
+                    <div>
+                        <div class="item-title">{growth['title']}</div>
+                        <div class="item-sub">{min_score}점 · 보완 필요</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">항목별 점수</div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        if completed < 6:
-            st.warning("6개 항목의 한 줄 회고를 모두 작성해 주세요.")
-        else:
-            st.success("한 줄 회고 작성이 완료되었습니다.")
+        for item in COMPETENCIES:
+            score = st.session_state.scores[item["code"]]
+            width = score * 20
+
+            st.markdown(
+                f"""
+                <div class="score-row">
+                    <span>{item['title']}</span>
+                    <div class="score-bar">
+                        <div class="score-fill" style="width:{width}%;"></div>
+                    </div>
+                    <strong>{score}</strong>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="reflection-grid-title">한 줄 회고 카드 <span style="font-size:0.8rem;color:#9AA6BA;font-weight:600;">6개 과정</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    for row_start in range(0, 6, 2):
+        cols = st.columns(2)
+
+        for col, item in zip(cols, COMPETENCIES[row_start:row_start + 2]):
+            reflection = st.session_state.get(
+                f"reflection_{item['code']}",
+                ""
+            ).strip() or "작성된 회고가 없습니다."
+
+            with col:
+                st.markdown(
+                    f"""
+                    <div class="reflection-report-card" style="--accent:{item['color']};">
+                        <div class="reflection-report-head">
+                            <div class="mini-badge">{item['icon']}</div>
+                            <div>
+                                <div class="item-title">{item['title']}</div>
+                                <div class="item-sub">{item['subtitle']}</div>
+                            </div>
+                        </div>
+                        <div class="reflection-text">{reflection}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+    st.markdown(
+        """
+        <div class="report-footer">
+            본 리포트는 연수생 본인의 자기 진단 및 회고를 위해 작성되었습니다.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    left, right = st.columns([1, 3])
+
+    with left:
+        if st.button("← 다시 수정하기", use_container_width=True):
+            go_to("score")

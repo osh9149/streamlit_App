@@ -1421,8 +1421,6 @@ elif st.session_state.page == "report":
                 reset_all()
                 st.rerun()
 
-    st.markdown('<div class="report-shell">', unsafe_allow_html=True)
-
     st.markdown(
         f"""
         <div class="report-header">

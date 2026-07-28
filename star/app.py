@@ -629,7 +629,6 @@ st.markdown(
     }
 
     .stButton > button {
-        white-space: nowrap;
         border-radius: 14px;
         min-height: 52px;
         font-size: 0.96rem;
@@ -1339,7 +1338,7 @@ elif st.session_state.page == "report":
         trainee_name,
     )
 
-    title_col, action_col = st.columns([1.3, 1.3])
+    title_col, action_col = st.columns([1.4, 1.2])
 
     with title_col:
         st.markdown(
@@ -1357,7 +1356,7 @@ elif st.session_state.page == "report":
         )
 
     with action_col:
-        save_col, print_col, reset_col = st.columns([2.8, 1, 1])
+        save_col, print_col, reset_col = st.columns([2.2, 1, 1])
 
         with save_col:
             with st.popover("⇩  이미지/PDF 저장", use_container_width=True):

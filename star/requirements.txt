@@ -1,8 +1,4 @@
-plotly
-numpy
-google-api-python-client
 streamlit>=1.39.0
 plotly>=5.24.0
-gspread>=6.1.4
-google-auth>=2.35.0
-pandas>=2.2.3
+reportlab>=4.2.0
+Pillow>=10.4.0

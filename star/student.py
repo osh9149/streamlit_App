@@ -699,7 +699,7 @@ if st.session_state.active_tab == "score":
         st.markdown(
             f"""
             <div class="constellation-wrap">
-                <div class="result-heading">나의 역량 별자리</div>
+                <div class="result-heading">나의 역량 별모</div>
                 <div class="result-subheading">
                     전체 평균 {average:.1f}점 · 5점 만점
                 </div>

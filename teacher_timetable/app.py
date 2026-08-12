@@ -10,6 +10,7 @@ st.set_page_config(
     page_title="교사 시간표 · 공강 비교",
     page_icon="🗓️",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 DAYS = ["월", "화", "수", "목", "금"]
@@ -20,7 +21,7 @@ PERIODS = [str(i) for i in range(1, 8)]
 DEFAULT_PDF_FILENAME = "2026-2학기 교사별 시간표 (임시).pdf"
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_PDF_PATH = APP_DIR / DEFAULT_PDF_FILENAME
-APP_VERSION = "2026-08-13 PDF-UPLOAD-V2"
+APP_VERSION = "2026-08-13 SIDEBAR-LIST-V6"
 
 
 def _word_center(word):
@@ -243,17 +244,103 @@ def day_summary(common):
     return "  \n".join(result)
 
 
-st.title("🗓️ 교사 시간표 · 공강 비교")
-st.caption("PDF를 자동 분석하여 교사별 시간표와 선택 교사의 공통 공강을 보여줍니다.")
-st.caption(f"앱 버전: {APP_VERSION}")
 
+# -------------------------
+# 화면 디자인
+# -------------------------
 st.markdown(
     """
     <style>
-    .block-container {padding-top: 1.8rem; padding-bottom: 3rem;}
-    div[data-testid="stMetric"] {background: #f8fafc; border: 1px solid #e5e7eb; padding: 12px; border-radius: 12px;}
+    .block-container {
+        padding-top: 1.35rem;
+        padding-bottom: 3rem;
+        max-width: 1500px;
+    }
+
+    /* 왼쪽 사이드바 */
+    section[data-testid="stSidebar"] {
+        width: 280px !important;
+        min-width: 280px !important;
+        background: #ffffff;
+        border-right: 1px solid #e7ebf2;
+    }
+    section[data-testid="stSidebar"] > div {
+        width: 280px !important;
+        padding-top: 0.8rem;
+    }
+
+    /* 사이드바 기본 여백 */
+    section[data-testid="stSidebar"] .block-container {
+        padding: 0.7rem 1rem 2rem 1rem;
+    }
+
+    /* 사이드바 버튼 = 교사 목록 */
+    section[data-testid="stSidebar"] div.stButton > button {
+        width: 100%;
+        min-height: 48px;
+        justify-content: flex-start;
+        text-align: left;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: #30435f;
+        font-size: 16px;
+        font-weight: 500;
+        padding: 0.65rem 0.7rem;
+        box-shadow: none;
+    }
+    section[data-testid="stSidebar"] div.stButton > button:hover {
+        background: #f3f6fb;
+        color: #17345f;
+        border: 0;
+    }
+
+    /* 메인 영역 카드 */
+    .timetable-card {
+        background: white;
+        border: 1px solid #dfe5ee;
+        border-radius: 26px;
+        padding: 18px 18px 12px 18px;
+        box-shadow: 0 1px 5px rgba(29, 47, 78, 0.08);
+        margin-top: 8px;
+    }
+    .panel-title {
+        font-size: 20px;
+        font-weight: 800;
+        color: #15243b;
+        margin-bottom: 4px;
+    }
+    .subtle {
+        color: #8b97aa;
+        font-size: 13px;
+    }
+
+    /* 데이터프레임 외형 */
+    div[data-testid="stDataFrame"] {
+        border: 0 !important;
+    }
+
+    /* 상단 버튼 */
+    .stDownloadButton > button {
+        border-radius: 10px;
+        border: 1px solid #dfe5ee;
+        background: #ffffff;
+        font-weight: 700;
+    }
+
+    /* Streamlit 기본 메뉴 약간 정리 */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
     """,
+    unsafe_allow_html=True,
+)
+
+# 이 버전에는 st.multiselect / st.selectbox 기반의 교사 선택 메뉴가 없습니다.
+# 교사는 오직 왼쪽 사이드바의 이름 버튼을 눌러 선택합니다.
+
+st.markdown(
+    f"<div style='font-size:12px;color:#a0a8b5;margin-bottom:4px'>버전 {APP_VERSION}</div>",
     unsafe_allow_html=True,
 )
 
@@ -261,30 +348,30 @@ st.markdown(
 # PDF 선택: 업로드 파일 우선, 없으면 GitHub 저장소의 기본 PDF
 # -------------------------
 with st.sidebar:
-    st.header("📄 시간표 PDF")
+    st.markdown("## 🗓️ 교사 시간표")
+    st.caption("교사 이름을 클릭해 선택하세요")
+
     uploaded_pdf = st.file_uploader(
-        "새 시간표 PDF 업로드",
+        "시간표 PDF 변경",
         type=["pdf"],
-        help="업로드한 PDF가 있으면 GitHub의 기본 PDF 대신 이 파일을 사용합니다.",
+        help="업로드하면 GitHub의 기본 PDF 대신 새 PDF를 사용합니다.",
+        label_visibility="collapsed",
     )
 
     if uploaded_pdf is not None:
         pdf_bytes = uploaded_pdf.getvalue()
         pdf_name = uploaded_pdf.name
-        source_label = "업로드한 PDF"
+        source_label = "업로드 PDF"
     else:
         pdf_bytes, pdf_name = load_default_pdf()
-        source_label = "GitHub 저장소 기본 PDF"
+        source_label = "기본 PDF"
 
     if pdf_bytes is None:
         st.error(
-            f"기본 PDF를 찾지 못했습니다. GitHub 저장소에서 app.py와 같은 위치에 "
-            f"'{DEFAULT_PDF_FILENAME}' 파일을 올리거나, 위에서 PDF를 업로드해 주세요."
+            f"기본 PDF를 찾지 못했습니다. app.py와 같은 폴더에 "
+            f"'{DEFAULT_PDF_FILENAME}' 파일을 올리거나 위에서 PDF를 업로드해 주세요."
         )
         st.stop()
-
-    st.success(f"사용 중: {source_label}")
-    st.caption(pdf_name)
 
 with st.spinner("시간표 PDF를 분석하고 있습니다..."):
     try:
@@ -295,48 +382,158 @@ with st.spinner("시간표 PDF를 분석하고 있습니다..."):
 
 teachers = sorted(data.keys(), key=lambda name: data[name]["no"])
 
-st.info(f"📄 **{pdf_name}** · 교사 **{len(teachers)}명** 시간표를 불러왔습니다.")
+# 세션에 선택 교사 목록 보관
+if "selected_teachers" not in st.session_state:
+    st.session_state.selected_teachers = []
+
+# PDF가 바뀌어 기존에 없는 교사는 선택 목록에서 제거
+st.session_state.selected_teachers = [
+    name for name in st.session_state.selected_teachers if name in data
+]
+
+# -------------------------
+# 왼쪽 교사 검색 + 목록
+# -------------------------
+with st.sidebar:
+    search = st.text_input(
+        "교사 검색",
+        placeholder="🔎  이름으로 검색...",
+        label_visibility="collapsed",
+    )
+
+    compare_clicked = st.button("↔  공강시간 찾기", use_container_width=True)
+    if compare_clicked and len(st.session_state.selected_teachers) < 2:
+        st.toast("공강 비교를 위해 교사를 2명 이상 선택해 주세요.")
+
+    st.divider()
+
+    filtered_teachers = [
+        name for name in teachers
+        if search.strip().lower() in name.lower()
+    ]
+
+    if not filtered_teachers:
+        st.caption("검색 결과가 없습니다.")
+
+    for name in filtered_teachers:
+        selected_now = name in st.session_state.selected_teachers
+        icon = "✓" if selected_now else "♙"
+        label = f"{icon}  {name}"
+        if st.button(label, key=f"teacher_nav_{data[name]['no']}_{name}"):
+            if selected_now:
+                st.session_state.selected_teachers.remove(name)
+            else:
+                st.session_state.selected_teachers.append(name)
+            st.rerun()
+
+    st.divider()
+    st.caption(f"{source_label} · {pdf_name}")
+    st.caption(f"교사 {len(teachers)}명 · {APP_VERSION}")
+
+selected = st.session_state.selected_teachers
+
+# -------------------------
+# 메인 상단
+# -------------------------
+top_left, top_right = st.columns([4, 1.65], vertical_alignment="center")
+with top_left:
+    if not selected:
+        st.markdown("### 조회할 교사를 선택하세요")
+    elif len(selected) == 1:
+        st.markdown(f"### {selected[0]} 선생님 시간표")
+    else:
+        st.markdown(f"### 선택 교사 {len(selected)}명 공강 비교")
+        st.caption(" · ".join(selected))
+
+with top_right:
+    if selected:
+        # 현재 선택 교사 시간표 / 공강 데이터를 CSV로 내보내기
+        export_rows = []
+        for name in selected:
+            info = data[name]
+            for period in PERIODS:
+                for day in DAYS:
+                    export_rows.append({
+                        "교사": name,
+                        "요일": day,
+                        "교시": int(period),
+                        "수업": compact_cell(info["schedule"][day][period]) or "공강",
+                    })
+        csv_all = pd.DataFrame(export_rows).to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "📄 CSV",
+            data=csv_all,
+            file_name="교사시간표.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+st.divider()
 
 if parse_warnings:
     with st.expander(f"⚠️ PDF 분석 확인사항 {len(parse_warnings)}건"):
         for warning in parse_warnings:
             st.write("-", warning)
 
-selected = st.multiselect(
-    "교사 선택",
-    options=teachers,
-    placeholder="교사를 1명 이상 선택하세요. 2명 이상 선택하면 공통 공강을 비교합니다.",
-)
-
+# -------------------------
+# 선택 전: 빈 시간표를 먼저 표시
+# -------------------------
 if not selected:
-    st.info("위의 선택 상자에서 교사를 선택해 주세요.")
+    st.markdown("<div class='panel-title'>🗓️ 선택 교사 시간표</div>", unsafe_allow_html=True)
+    st.caption("왼쪽에서 교사 이름을 선택하면 시간표가 표시됩니다.")
+
+    empty_rows = []
+    for period in PERIODS:
+        row = {"교시": period}
+        for day in DAYS:
+            row[day] = ""
+        empty_rows.append(row)
+    empty_df = pd.DataFrame(empty_rows).set_index("교시")
+    st.dataframe(empty_df, use_container_width=True, height=445)
     st.stop()
 
-metric_cols = st.columns(min(len(selected), 4))
-for i, name in enumerate(selected[:4]):
+# -------------------------
+# 교사 1명: 개인 시간표
+# -------------------------
+if len(selected) == 1:
+    name = selected[0]
     info = data[name]
-    metric_cols[i].metric(name, f"수업 {info['hours_declared']}시간")
-if len(selected) > 4:
-    st.caption(f"외 {len(selected) - 4}명 선택됨")
 
-if len(selected) >= 2:
-    st.divider()
-    st.subheader("🤝 선택 교사의 공통 공강")
+    st.markdown(f"<div class='panel-title'>🗓️ {name} 선생님 시간표</div>", unsafe_allow_html=True)
+    homeroom = f" · 표시 교실/담임 {info['homeroom']}" if info.get("homeroom") else ""
+    st.caption(f"주 {info['hours_declared']}시간{homeroom}")
+    render_schedule_table(info)
 
+    free = sorted(free_slots(info), key=lambda item: (DAYS.index(item[0]), int(item[1])))
+    by_day = []
+    for day in DAYS:
+        periods = [p for d, p in free if d == day]
+        by_day.append(
+            f"**{day}** " + (", ".join(f"{p}교시" for p in periods) if periods else "없음")
+        )
+    st.markdown("**공강**  ·  " + "　|　".join(by_day))
+
+# -------------------------
+# 교사 2명 이상: 공통 공강 + 개인 시간표
+# -------------------------
+else:
     common = set.intersection(*(free_slots(data[name]) for name in selected))
-    c1, c2 = st.columns([1, 2])
 
-    with c1:
+    st.markdown("<div class='panel-title'>↔ 공통 공강시간</div>", unsafe_allow_html=True)
+    st.caption("선택한 모든 교사가 동시에 수업이 없는 시간입니다.")
+
+    left, right = st.columns([1, 2.5])
+    with left:
         st.metric("공통 공강", f"주 {len(common)}교시")
         st.markdown(day_summary(common))
 
-    with c2:
+    with right:
         grid = common_free_df(common)
 
         def style_common(value):
             if value == "●":
-                return "background-color: #dcfce7; color: #15803d; font-weight: 900; text-align: center;"
-            return "background-color: #f8fafc; color: #cbd5e1;"
+                return "background-color: #e8f7ed; color: #16803c; font-weight: 900; text-align: center;"
+            return "background-color: #fbfcfe; color: #d7dde7;"
 
         st.dataframe(
             grid.style.map(style_common),
@@ -345,47 +542,28 @@ if len(selected) >= 2:
         )
 
     if common:
-        export_rows = [
+        common_rows = [
             {"요일": day, "교시": int(period), "선택교사": ", ".join(selected)}
             for day in DAYS
             for period in PERIODS
             if (day, period) in common
         ]
-        csv = pd.DataFrame(export_rows).to_csv(index=False).encode("utf-8-sig")
+        common_csv = pd.DataFrame(common_rows).to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             "공통 공강 CSV 다운로드",
-            data=csv,
+            data=common_csv,
             file_name="공통공강.csv",
             mime="text/csv",
         )
     else:
         st.warning("선택한 교사 모두가 동시에 공강인 시간이 없습니다.")
 
-st.divider()
-st.subheader("👩‍🏫 교사별 시간표")
-
-for name in selected:
-    info = data[name]
-    homeroom = f" · 표시 교실/담임 {info['homeroom']}" if info.get("homeroom") else ""
-
-    with st.expander(
-        f"{name} - 주 {info['hours_declared']}시간{homeroom}",
-        expanded=(len(selected) <= 2),
-    ):
-        render_schedule_table(info)
-
-        free = sorted(
-            free_slots(info),
-            key=lambda item: (DAYS.index(item[0]), int(item[1])),
-        )
-        by_day = []
-        for day in DAYS:
-            periods = [p for d, p in free if d == day]
-            by_day.append(
-                f"**{day}** "
-                + (", ".join(f"{p}교시" for p in periods) if periods else "없음")
-            )
-        st.markdown("공강: " + "  |  ".join(by_day))
+    st.divider()
+    st.markdown("### 선택 교사별 시간표")
+    for name in selected:
+        info = data[name]
+        with st.expander(f"{name} · 주 {info['hours_declared']}시간", expanded=False):
+            render_schedule_table(info)
 
 st.caption(
     "※ 공강은 PDF 시간표에서 수업이 배정되지 않은 교시를 뜻합니다. "

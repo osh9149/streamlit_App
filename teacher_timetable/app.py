@@ -21,7 +21,7 @@ PERIODS = [str(i) for i in range(1, 8)]
 DEFAULT_PDF_FILENAME = "2026-2학기 교사별 시간표 (임시).pdf"
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_PDF_PATH = APP_DIR / DEFAULT_PDF_FILENAME
-APP_VERSION = "2026-08-13 SIDEBAR-COMPACT-V7"
+APP_VERSION = "2026-08-13 SIDEBAR-3COL-COMPACT-V8"
 
 
 def _word_center(word):
@@ -315,23 +315,32 @@ st.markdown(
     }
     section[data-testid="stSidebar"] div.stButton > button {
         width:100%;
-        min-height:34px !important;
-        height:34px !important;
+        min-height:28px !important;
+        height:28px !important;
         justify-content:flex-start;
         text-align:left;
         border:0 !important;
-        border-radius:9px !important;
+        border-radius:7px !important;
         background:transparent !important;
         color:#30435f !important;
-        font-size:15px !important;
+        font-size:12px !important;
         font-weight:500 !important;
-        padding:0.18rem 0.45rem !important;
-        margin:1px 0 !important;
+        line-height:1.05 !important;
+        padding:0.05rem 0.18rem !important;
+        margin:0 !important;
         box-shadow:none !important;
+        white-space:nowrap !important;
     }
     section[data-testid="stSidebar"] div.stButton > button:hover {
         background:#f2f5fb !important;
         color:#17345f !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
+        gap:0.18rem !important;
+        margin-bottom:0 !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="column"] {
+        padding:0 !important;
     }
     section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:focus {
         box-shadow:none !important;
@@ -473,16 +482,21 @@ with st.sidebar:
     if not filtered_teachers:
         st.caption("검색 결과가 없습니다.")
 
-    for name in filtered_teachers:
-        selected_now = name in st.session_state.selected_teachers
-        icon = "✓" if selected_now else "♙"
-        label = f"{icon}  {name}"
-        if st.button(label, key=f"teacher_nav_{data[name]['no']}_{name}"):
-            if selected_now:
-                st.session_state.selected_teachers.remove(name)
-            else:
-                st.session_state.selected_teachers.append(name)
-            st.rerun()
+    # 교사 목록을 3열로 촘촘하게 배치
+    for i in range(0, len(filtered_teachers), 3):
+        cols = st.columns(3, gap="small")
+        row_names = filtered_teachers[i:i+3]
+        for col, name in zip(cols, row_names):
+            with col:
+                selected_now = name in st.session_state.selected_teachers
+                icon = "✓" if selected_now else ""
+                label = f"{icon}{name}"
+                if st.button(label, key=f"teacher_nav_{data[name]['no']}_{name}", use_container_width=True):
+                    if selected_now:
+                        st.session_state.selected_teachers.remove(name)
+                    else:
+                        st.session_state.selected_teachers.append(name)
+                    st.rerun()
 
     st.divider()
     st.caption(f"{source_label} · {pdf_name}")

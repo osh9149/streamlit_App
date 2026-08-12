@@ -21,7 +21,7 @@ PERIODS = [str(i) for i in range(1, 8)]
 DEFAULT_PDF_FILENAME = "2026-2학기 교사별 시간표 (임시).pdf"
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_PDF_PATH = APP_DIR / DEFAULT_PDF_FILENAME
-APP_VERSION = "2026-08-13 SIDEBAR-LIST-V6"
+APP_VERSION = "2026-08-13 SIDEBAR-COMPACT-V7"
 
 
 def _word_center(word):
@@ -251,86 +251,148 @@ def day_summary(common):
 st.markdown(
     """
     <style>
+    :root {
+        --brand:#4f63f4;
+        --ink:#14213d;
+        --muted:#8d98aa;
+        --line:#e6eaf0;
+        --soft:#f6f8fb;
+    }
+
+    html, body, [class*="css"] { font-family: Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif; }
     .block-container {
-        padding-top: 1.35rem;
-        padding-bottom: 3rem;
+        padding-top: 1.1rem;
+        padding-bottom: 1.5rem;
         max-width: 1500px;
     }
 
-    /* 왼쪽 사이드바 */
+    /* 사이드바 */
     section[data-testid="stSidebar"] {
         width: 280px !important;
         min-width: 280px !important;
-        background: #ffffff;
-        border-right: 1px solid #e7ebf2;
+        background:#fff;
+        border-right:1px solid var(--line);
     }
     section[data-testid="stSidebar"] > div {
-        width: 280px !important;
-        padding-top: 0.8rem;
+        width:280px !important;
     }
-
-    /* 사이드바 기본 여백 */
     section[data-testid="stSidebar"] .block-container {
-        padding: 0.7rem 1rem 2rem 1rem;
+        padding: 0.8rem 1.1rem 1rem 1.1rem !important;
+    }
+    section[data-testid="stSidebar"] h2 {
+        font-size: 23px !important;
+        font-weight: 800 !important;
+        color: var(--ink) !important;
+        margin: 0.15rem 0 0.65rem 0 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        display:none;
+    }
+    section[data-testid="stSidebar"] [data-testid="stFileUploader"] {
+        margin-bottom: .35rem;
+    }
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+        min-height: 46px !important;
+        padding: .25rem !important;
+        border-radius: 10px !important;
     }
 
-    /* 사이드바 버튼 = 교사 목록 */
+    /* 검색창 */
+    section[data-testid="stSidebar"] div[data-baseweb="input"] {
+        border-radius: 12px !important;
+        background:#f3f6fa !important;
+        border:0 !important;
+        min-height: 42px !important;
+    }
+    section[data-testid="stSidebar"] input {
+        font-size:15px !important;
+    }
+
+    /* 사이드바 버튼: 촘촘한 교사 목록 */
+    section[data-testid="stSidebar"] div.stButton {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
     section[data-testid="stSidebar"] div.stButton > button {
-        width: 100%;
-        min-height: 48px;
-        justify-content: flex-start;
-        text-align: left;
-        border: 0;
-        border-radius: 10px;
-        background: transparent;
-        color: #30435f;
-        font-size: 16px;
-        font-weight: 500;
-        padding: 0.65rem 0.7rem;
-        box-shadow: none;
+        width:100%;
+        min-height:34px !important;
+        height:34px !important;
+        justify-content:flex-start;
+        text-align:left;
+        border:0 !important;
+        border-radius:9px !important;
+        background:transparent !important;
+        color:#30435f !important;
+        font-size:15px !important;
+        font-weight:500 !important;
+        padding:0.18rem 0.45rem !important;
+        margin:1px 0 !important;
+        box-shadow:none !important;
     }
     section[data-testid="stSidebar"] div.stButton > button:hover {
-        background: #f3f6fb;
-        color: #17345f;
-        border: 0;
+        background:#f2f5fb !important;
+        color:#17345f !important;
+    }
+    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:focus {
+        box-shadow:none !important;
     }
 
-    /* 메인 영역 카드 */
-    .timetable-card {
-        background: white;
-        border: 1px solid #dfe5ee;
-        border-radius: 26px;
-        padding: 18px 18px 12px 18px;
-        box-shadow: 0 1px 5px rgba(29, 47, 78, 0.08);
-        margin-top: 8px;
+    /* 공강시간 찾기 버튼만 크게 */
+    section[data-testid="stSidebar"] div.stButton:nth-of-type(1) > button {
+        min-height:46px !important;
+        height:46px !important;
+        justify-content:center !important;
+        border:1px solid #dce2ec !important;
+        background:#fff !important;
+        font-size:15px !important;
+        font-weight:800 !important;
+        margin: 0.25rem 0 0.5rem 0 !important;
+    }
+
+    section[data-testid="stSidebar"] hr {
+        margin:.55rem 0 !important;
+        border-color:var(--line) !important;
+    }
+
+    /* 메인 상단 */
+    h3 {
+        color:var(--ink) !important;
+        font-size:22px !important;
+        font-weight:800 !important;
+        margin-top:.15rem !important;
     }
     .panel-title {
-        font-size: 20px;
-        font-weight: 800;
-        color: #15243b;
-        margin-bottom: 4px;
-    }
-    .subtle {
-        color: #8b97aa;
-        font-size: 13px;
+        font-size:18px;
+        font-weight:800;
+        color:var(--ink);
+        margin: 0 0 .55rem 0;
     }
 
-    /* 데이터프레임 외형 */
+    /* 시간표 영역을 카드처럼 */
     div[data-testid="stDataFrame"] {
-        border: 0 !important;
+        border:1px solid #dfe5ee !important;
+        border-radius:22px !important;
+        overflow:hidden !important;
+        box-shadow:0 2px 6px rgba(29,47,78,.06);
+        background:#fff;
+    }
+    div[data-testid="stDataFrame"] [role="columnheader"] {
+        background:#f3f6fa !important;
+        font-weight:800 !important;
+        color:#1d2d4b !important;
     }
 
-    /* 상단 버튼 */
     .stDownloadButton > button {
-        border-radius: 10px;
-        border: 1px solid #dfe5ee;
-        background: #ffffff;
-        font-weight: 700;
+        border-radius:10px !important;
+        border:1px solid #dfe5ee !important;
+        background:#fff !important;
+        font-weight:700 !important;
+        min-height:38px !important;
     }
 
-    /* Streamlit 기본 메뉴 약간 정리 */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    #MainMenu {visibility:hidden;}
+    footer {visibility:hidden;}
+    header[data-testid="stHeader"] {background:transparent;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -339,24 +401,20 @@ st.markdown(
 # 이 버전에는 st.multiselect / st.selectbox 기반의 교사 선택 메뉴가 없습니다.
 # 교사는 오직 왼쪽 사이드바의 이름 버튼을 눌러 선택합니다.
 
-st.markdown(
-    f"<div style='font-size:12px;color:#a0a8b5;margin-bottom:4px'>버전 {APP_VERSION}</div>",
-    unsafe_allow_html=True,
-)
 
 # -------------------------
 # PDF 선택: 업로드 파일 우선, 없으면 GitHub 저장소의 기본 PDF
 # -------------------------
 with st.sidebar:
-    st.markdown("## 🗓️ 교사 시간표")
-    st.caption("교사 이름을 클릭해 선택하세요")
+    st.markdown("## 📅 교사 시간표")
 
-    uploaded_pdf = st.file_uploader(
-        "시간표 PDF 변경",
-        type=["pdf"],
-        help="업로드하면 GitHub의 기본 PDF 대신 새 PDF를 사용합니다.",
-        label_visibility="collapsed",
-    )
+    with st.expander("시간표 PDF 변경", expanded=False):
+        uploaded_pdf = st.file_uploader(
+            "PDF 업로드",
+            type=["pdf"],
+            help="업로드하면 GitHub의 기본 PDF 대신 새 PDF를 사용합니다.",
+            label_visibility="collapsed",
+        )
 
     if uploaded_pdf is not None:
         pdf_bytes = uploaded_pdf.getvalue()
@@ -397,7 +455,7 @@ st.session_state.selected_teachers = [
 with st.sidebar:
     search = st.text_input(
         "교사 검색",
-        placeholder="🔎  이름으로 검색...",
+        placeholder="이름으로 검색...",
         label_visibility="collapsed",
     )
 
@@ -489,7 +547,7 @@ if not selected:
             row[day] = ""
         empty_rows.append(row)
     empty_df = pd.DataFrame(empty_rows).set_index("교시")
-    st.dataframe(empty_df, use_container_width=True, height=445)
+    st.dataframe(empty_df, use_container_width=True, height=500)
     st.stop()
 
 # -------------------------

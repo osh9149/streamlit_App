@@ -319,7 +319,7 @@ st.markdown(
         height:28px !important;
         justify-content:flex-start;
         text-align:left;
-        border:0 !important;
+        border:2 !important;
         border-radius:7px !important;
         background:transparent !important;
         color:#30435f !important;

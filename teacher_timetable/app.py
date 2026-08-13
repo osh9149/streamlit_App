@@ -21,7 +21,7 @@ PERIODS = [str(i) for i in range(1, 8)]
 DEFAULT_PDF_FILENAME = "2026-2학기 교사별 시간표 (임시).pdf"
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_PDF_PATH = APP_DIR / DEFAULT_PDF_FILENAME
-APP_VERSION = "2026-08-13 SIDEBAR-3COL-AUTO-COMPARE-V9"
+APP_VERSION = "2026-08-13 SIDEBAR-3COL-CLEAR-V10"
 
 
 def _word_center(word):
@@ -455,6 +455,15 @@ with st.sidebar:
         placeholder="이름으로 검색...",
         label_visibility="collapsed",
     )
+
+    if st.button(
+        "모두 선택해제",
+        key="clear_all_teachers",
+        use_container_width=True,
+        disabled=(len(st.session_state.selected_teachers) == 0),
+    ):
+        st.session_state.selected_teachers = []
+        st.rerun()
 
     st.divider()
 

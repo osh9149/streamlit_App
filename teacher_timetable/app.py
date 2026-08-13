@@ -21,7 +21,7 @@ PERIODS = [str(i) for i in range(1, 8)]
 DEFAULT_PDF_FILENAME = "2026-2학기 교사별 시간표 (임시).pdf"
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_PDF_PATH = APP_DIR / DEFAULT_PDF_FILENAME
-APP_VERSION = "2026-08-13 SIDEBAR-3COL-COMPACT-V8"
+APP_VERSION = "2026-08-13 SIDEBAR-3COL-AUTO-COMPARE-V9"
 
 
 def _word_center(word):
@@ -346,18 +346,6 @@ st.markdown(
         box-shadow:none !important;
     }
 
-    /* 공강시간 찾기 버튼만 크게 */
-    section[data-testid="stSidebar"] div.stButton:nth-of-type(1) > button {
-        min-height:46px !important;
-        height:46px !important;
-        justify-content:center !important;
-        border:1px solid #dce2ec !important;
-        background:#fff !important;
-        font-size:15px !important;
-        font-weight:800 !important;
-        margin: 0.25rem 0 0.5rem 0 !important;
-    }
-
     section[data-testid="stSidebar"] hr {
         margin:.55rem 0 !important;
         border-color:var(--line) !important;
@@ -467,10 +455,6 @@ with st.sidebar:
         placeholder="이름으로 검색...",
         label_visibility="collapsed",
     )
-
-    compare_clicked = st.button("↔  공강시간 찾기", use_container_width=True)
-    if compare_clicked and len(st.session_state.selected_teachers) < 2:
-        st.toast("공강 비교를 위해 교사를 2명 이상 선택해 주세요.")
 
     st.divider()
 

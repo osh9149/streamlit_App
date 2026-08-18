@@ -21,7 +21,7 @@ PERIODS = [str(i) for i in range(1, 8)]
 DEFAULT_PDF_FILENAME = "2026-2학기 교사별 시간표 (임시).pdf"
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_PDF_PATH = APP_DIR / DEFAULT_PDF_FILENAME
-APP_VERSION = "2026-08-13 SIDEBAR-3COL-CLEAR-V10"
+APP_VERSION = "2026-08-18 BUSY-TEACHER-FINDER-V11"
 
 
 def _word_center(word):
@@ -242,6 +242,19 @@ def day_summary(common):
         else:
             result.append(f"**{day}요일**: 공통 공강 없음")
     return "  \n".join(result)
+
+
+def busy_teachers_at(selected_names, data, day, period):
+    """선택한 교사 중 특정 요일/교시에 수업이 있는 교사만 반환한다."""
+    result = []
+    for name in selected_names:
+        class_text = data[name]["schedule"][day][period]
+        if class_text:
+            result.append({
+                "교사": name,
+                "수업": compact_cell(class_text),
+            })
+    return result
 
 
 
@@ -539,6 +552,51 @@ if parse_warnings:
     with st.expander(f"⚠️ PDF 분석 확인사항 {len(parse_warnings)}건"):
         for warning in parse_warnings:
             st.write("-", warning)
+
+# -------------------------
+# 선택 교사 중 특정 시간에 수업이 있는 교사 찾기
+# 공통 공강 계산과는 별도의 기능
+# -------------------------
+if selected:
+    st.markdown("<div class='panel-title'>🔎 선택 교사 중 수업 중인 교사 찾기</div>", unsafe_allow_html=True)
+    st.caption("요일과 교시를 선택하면, 현재 선택한 교사들 가운데 그 시간에 실제 수업이 있는 교사만 표시합니다.")
+
+    find_col1, find_col2, find_col3 = st.columns([1, 1, 3])
+    with find_col1:
+        busy_day = st.selectbox(
+            "요일",
+            DAYS,
+            key="busy_lookup_day",
+        )
+    with find_col2:
+        busy_period = st.selectbox(
+            "교시",
+            PERIODS,
+            format_func=lambda p: f"{p}교시",
+            key="busy_lookup_period",
+        )
+
+    busy_rows = busy_teachers_at(selected, data, busy_day, busy_period)
+
+    with find_col3:
+        st.metric(
+            f"{busy_day}요일 {busy_period}교시 수업 교사",
+            f"{len(busy_rows)}명",
+            help=f"현재 선택한 교사 {len(selected)}명 중 수업이 있는 교사 수입니다.",
+        )
+
+    if busy_rows:
+        busy_df = pd.DataFrame(busy_rows)
+        st.dataframe(
+            busy_df,
+            use_container_width=True,
+            hide_index=True,
+            height=min(70 + 36 * len(busy_rows), 320),
+        )
+    else:
+        st.info(f"{busy_day}요일 {busy_period}교시에 선택한 교사 중 수업이 있는 교사가 없습니다.")
+
+    st.divider()
 
 # -------------------------
 # 선택 전: 빈 시간표를 먼저 표시
